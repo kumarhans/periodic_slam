@@ -4,8 +4,11 @@
 
 This package performs state estimation periodically
 
-**Keywords:** example, package, template
+Dataset: 
+## Preliminaries
 
+This package uses: 
+* the feature tracker and image processor nodelet included with [msckf_vio] (https://github.com/KumarRobotics/msckf_vio).
 
 ## Installation
 
@@ -13,7 +16,7 @@ This package performs state estimation periodically
 
 - [Robot Operating System (ROS)](http://wiki.ros.org) (middleware for robotics),
 - [Eigen] (linear algebra library)
-- [gtsam](https://github.com/borglab/gtsam) (backend graph optimization) 
+- [gtsam](https://github.com/borglab/gtsam) (backend graph optimization) When building gtsam from source, use the following cmake flags: -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_UNSTABLE=OFF -DGTSAM_BUILD_WRAP=OFF -DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_TYPEDEF_POINTS_TO_VECTORS=ON 
 - [OpenCV] 
 
 #### Building
