@@ -106,7 +106,7 @@ void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
  
     gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
-    camSub = nh.subscribe("features", 1000, &StereoISAM2::camCallback, this);
+    imuSub = nh.subscribe("features", 1000, &StereoISAM2::imuCallback, this);
  
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
@@ -181,7 +181,7 @@ void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_m
                 
             // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
             // Add prior to the landmark as well    
-            //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
+            graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
 
             
         }

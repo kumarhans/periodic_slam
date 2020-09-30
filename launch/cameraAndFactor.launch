@@ -15,17 +15,17 @@
         type="spawn_model"
         args="-z .5 -urdf -model robot -param robot_description"
     />
+ 
 
 
-
-    <node pkg="robot_state_publisher" type="robot_state_publisher"  name="rob_st_pub">
+   <node pkg="robot_state_publisher" type="robot_state_publisher"  name="rob_st_pub">
       <param name="publish_frequency" type="double" value="30.0" />
     </node>
 
     <node pkg="camera_gazebo" type="camera_control_pos.py" name="camera_controller" output="screen">
     </node>  -->
 
-    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/mediumDown.bag " /> 
+    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/downOnly.bag " /> 
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/slowForward.bag " /> 
      -->
 
