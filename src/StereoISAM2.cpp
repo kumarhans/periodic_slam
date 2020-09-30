@@ -181,7 +181,7 @@ void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_m
                 
             // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
             // Add prior to the landmark as well    
-            //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
+            graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
 
             
         }
@@ -235,23 +235,7 @@ void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_m
 }
  
     
-
-void StereoISAM2::addVisualFactor(int frameNum, int landmarkNum, int ul, int ur, int v){
-  
-    gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
-    
  
-
-    if (smartFactors.count(landmarkNum) == 0) {
- 
-        auto gaussian = noiseModel::Isotropic::Sigma(3, .1);
-        SmartProjectionParams params(HESSIAN, ZERO_ON_DEGENERACY);
-        smartFactors[landmarkNum] = SmartStereoProjectionPoseFactor::shared_ptr(
-            new SmartStereoProjectionPoseFactor(gaussian, params));
-        graph.push_back(smartFactors[landmarkNum]);
-    }
-    smartFactors[landmarkNum]->add(StereoPoint2(ul,ur,v), X(frameNum), K);
-}
 
  
 
