@@ -1,0 +1,29 @@
+# Ros Topics
+image0_topic: "/left_r200/camera/color/image_raw"
+image1_topic: "/right_r200/camera/color/image_raw"
+visualize: true
+
+# Intrinsic Camera Paramters
+fx: 554.3826904296875
+fy: 554.3826904296875
+cx: 320.0
+cy: 240.0
+k1: 0.0
+k2: 0.0
+p1: 0.0
+p2: 0.0
+k3: 0.0
+width: 640
+height: 480
+
+# Extrinsic Camera Paramters 
+baseline: .1
+initX: 0.0
+initY: 0.0
+initZ: 1.25
+initRoll: 0.0
+initPitch: 0.5
+initYaw: 0.0
+
+
+ 

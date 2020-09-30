@@ -1,0 +1,31 @@
+graph {
+  size="5,5";
+
+  var1[label="1", pos="0.5,1!"];
+  var2[label="2", pos="0.5,1!"];
+  var3[label="3", pos="0.5,1!"];
+  var4[label="4", pos="0.5,1!"];
+  var5[label="5", pos="0.5,1!"];
+  var6[label="6", pos="0.5,1!"];
+  var7[label="7", pos="0.500086,1.00013!"];
+  var8[label="8", pos="1.50001,1.99998!"];
+  var9[label="9", pos="1.5,0!"];
+  var10[label="10", pos="0,1!"];
+
+  factor0[label="", shape=point];
+  var1--factor0;
+  var1--var3;
+  var1--var4;
+  var1--var5;
+  var2--var3;
+  var2--var4;
+  var2--var5;
+  factor7[label="", shape=point];
+  var6--factor7;
+  var6--var8;
+  var6--var9;
+  var6--var10;
+  var7--var8;
+  var7--var9;
+  var7--var10;
+}
