@@ -26,7 +26,7 @@
 #include <geometry_msgs/Twist.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
-#include <factor_graph/CameraMeasurement.h>
+#include <periodic_slam/CameraMeasurement.h>
 #include <pcl/common/centroid.h>
  
 
@@ -115,7 +115,7 @@ private:
 
 
     void imageCallback(const sensor_msgs::ImageConstPtr& left_msg, const sensor_msgs::ImageConstPtr& right_msg);
-    void camCallback(const factor_graph::CameraMeasurementPtr& camera_msg);
+    void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);
     void sendTfs();
     static void GTCallback(const geometry_msgs::Twist &msg);
 

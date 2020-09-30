@@ -62,7 +62,7 @@
 
  
 
-    <node pkg="gtsam_vio" type="image_processor"  output="screen" name="image_processor">  
+    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor">  
       
       <rosparam command="load" file="$(arg calibration_file)"/>
       <param name="grid_row" value="3"/>

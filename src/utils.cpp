@@ -57,13 +57,13 @@ cv::Mat getVec16Transform(const ros::NodeHandle &nh,
   std::vector<double> v;
   nh.getParam(field, v);
   
-  if (nh.hasParam(field))
-  {
-    std::cout << "ohooo" << std::endl;
-  }
-  std::cout << field << std::endl;
+  // if (nh.hasParam(field))
+  // {
+  //   std::cout << "ohooo" << std::endl;
+  // }
+  // std::cout << field << std::endl;
 
-  std::cout << v.size() << std::endl;
+  // std::cout << v.size() << std::endl;
   if (v.size() != 16) {
     throw std::runtime_error("invalid vec16!");
   }

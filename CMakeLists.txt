@@ -67,8 +67,10 @@ link_directories(
  
  
 add_executable(stereoISAM2 src/StereoISAM2.cpp src/parameters.cpp)
-
 target_link_libraries(stereoISAM2 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+add_executable(stereoISAM2_IMU src/StereoISAM2_IMU.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
 
  
 

@@ -11,7 +11,7 @@
 
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
-#include <StereoISAM2.h>
+#include <StereoISAM2_IMU.h>
 //Libraries for Image Stuff
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
@@ -27,10 +27,11 @@
 #include <geometry_msgs/Twist.h>
 
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Imu.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/common/centroid.h>
-#include <factor_graph/CameraMeasurement.h>
+#include <periodic_slam/CameraMeasurement.h>
 
 
 #include <fstream>
@@ -106,7 +107,7 @@ void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
  
     gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
-    imuSub = nh.subscribe("features", 1000, &StereoISAM2::imuCallback, this);
+    imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
  
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
@@ -131,129 +132,12 @@ void StereoISAM2::initializeFactorGraph(){
 }
 
  
-
-void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_msg){
-        cout << "got message"<< endl;
-        vector<factor_graph::FeatureMeasurement> feature_vector = camera_msg->features;
-        initialEstimate.insert(X(frame), currPose);
  
-        int radius = 2;
-        cv::Mat debug = curr_image_left.clone();
-
-        noiseModel::Isotropic::shared_ptr prior_landmark_noise = noiseModel::Isotropic::Sigma(3, 0.1);
-        noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 10.0); // one pixel in u and v
-        gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
-
-        for (int i = 0; i < feature_vector.size(); i++){
-            factor_graph::FeatureMeasurement feature = feature_vector[i];
-            int landmark_id = feature.id;
-            double uL = feature.u0;
-            double uR = feature.u1;
-            double v = feature.v0;
-
-            cv::circle(debug, cvPoint(uL, v), radius*3, CV_RGB(255, 0, 0));
-            //addVisualFactor(frame, landmark_id, uL, uR, v);
-
-            double d = uL - uR;
-            double z = fx*baseline/d;
-            double x = (uL-cx)*z/fx;
-            double y = (v-cy)*z/fy;
-            
-            Point3 camera_point = Point3(x,y,z); 
-            Point3 body_point = bodyToSensor.transform_from(camera_point);
-            Point3 world_point = currPose.transform_from(body_point) ;
-
-            pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,0,100);
-            pcl_world_point.x = world_point.x();
-            pcl_world_point.y = world_point.y();
-            pcl_world_point.z = world_point.z(); 
-            landmark_cloud_msg_ptr->points.push_back(pcl_world_point);  
-            
-           
-            if (!currentEstimate.exists(L(landmark_id))) {
-                initialEstimate.insert(L(landmark_id), world_point);
-            }
-            
-            // Add ISAM2 factor connecting this frame's pose to the landmark
-            graph.emplace_shared<
-            GenericStereoFactor<Pose3, Point3> >(StereoPoint2(uL, uR, v), 
-                pose_landmark_noise, X(frame), L(landmark_id), K,bodyToSensor);
-                
-            // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
-            // Add prior to the landmark as well    
-            graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
-
-            
-        }
-
-        geometry_msgs::PoseStamped poseStamped;
-        poseStamped.header.frame_id="/world";
-        poseStamped.header.stamp = ros::Time::now();
-     
- 
-        poseStamped.pose.position.x =  currPose.x();
-        poseStamped.pose.position.y = currPose.y();
-        poseStamped.pose.position.z = currPose.z();
-
-
-        path.header.frame_id = "world";
-        path.poses.push_back(poseStamped);
-        path.header.stamp = poseStamped.header.stamp;
-        path_pub.publish(path);
-
-
-
-
-        // Publish landmark PointCloud message (in world frame)
-        landmark_cloud_msg_ptr->header.frame_id = "world";
-        landmark_cloud_msg_ptr->height = 1;
-        landmark_cloud_msg_ptr->width = landmark_cloud_msg_ptr->points.size();
-        point_pub.publish(landmark_cloud_msg_ptr);
-        landmark_cloud_msg_ptr->clear();
-        sendTfs();
-
-        
-        
-
-
-        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", debug).toImageMsg();
-        debug_pub.publish(msg);
-        
-
-        isam.update(graph, initialEstimate);
-
-        // // ofstream os("test.dot");
-        // // graph.saveGraph(os, initialEstimate);
-
-
-        currentEstimate = isam.calculateEstimate();
-        currPose = currentEstimate.at<Pose3>(X(frame));
-
-        graph.resize(30);
-        initialEstimate.clear();
-        frame ++;
+void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
+    geometry_msgs::Vector3 aV = imu_msg.angular_velocity;
+    geometry_msgs::Vector3 lA = imu_msg.linear_acceleration;
+    cout << lA.x << endl;
 }
- 
-    
-
-void StereoISAM2::addVisualFactor(int frameNum, int landmarkNum, int ul, int ur, int v){
-  
-    gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
-    
- 
-
-    if (smartFactors.count(landmarkNum) == 0) {
- 
-        auto gaussian = noiseModel::Isotropic::Sigma(3, .1);
-        SmartProjectionParams params(HESSIAN, ZERO_ON_DEGENERACY);
-        smartFactors[landmarkNum] = SmartStereoProjectionPoseFactor::shared_ptr(
-            new SmartStereoProjectionPoseFactor(gaussian, params));
-        graph.push_back(smartFactors[landmarkNum]);
-    }
-    smartFactors[landmarkNum]->add(StereoPoint2(ul,ur,v), X(frameNum), K);
-}
-
- 
 
 int main(int argc, char **argv)
 {
@@ -275,5 +159,150 @@ int main(int argc, char **argv)
     return 0;
 }
 
+
+// /* ----------------------------------------------------------------------------
+//  * GTSAM Copyright 2010, Georgia Tech Research Corporation,
+//  * Atlanta, Georgia 30332-0415
+//  * All Rights Reserved
+//  * Authors: Frank Dellaert, et al. (see THANKS for the full author list)
+//  * See LICENSE for the license information
+//  * -------------------------------------------------------------------------- */
+
+// /**
+//  * @file ImuFactorExample2
+//  * @brief Test example for using GTSAM ImuFactor and ImuCombinedFactor with ISAM2.
+//  * @author Robert Truax
+//  */
+
+// #include <gtsam/geometry/PinholeCamera.h>
+// #include <gtsam/geometry/Cal3_S2.h>
+// #include <gtsam/inference/Symbol.h>
+// #include <gtsam/navigation/ImuBias.h>
+// #include <gtsam/navigation/ImuFactor.h>
+// #include <gtsam/navigation/Scenario.h>
+// #include <gtsam/nonlinear/ISAM2.h>
+// #include <gtsam/slam/BetweenFactor.h>
+
+// #include <vector>
+
+// using namespace std;
+// using namespace gtsam;
+
+// // Shorthand for velocity and pose variables
+// using symbol_shorthand::V;
+// using symbol_shorthand::X;
+
+// const double kGravity = 9.81;
+
+// /* ************************************************************************* */
+// int main(int argc, char* argv[]) {
+//   auto params = PreintegrationParams::MakeSharedU(kGravity);
+//   params->setAccelerometerCovariance(I_3x3 * 0.1);
+//   params->setGyroscopeCovariance(I_3x3 * 0.1);
+//   params->setIntegrationCovariance(I_3x3 * 0.1);
+//   params->setUse2ndOrderCoriolis(false);
+//   params->setOmegaCoriolis(Vector3(0, 0, 0));
+
+//   Pose3 delta(Rot3::Rodrigues(-0.1, 0.2, 0.25), Point3(0.05, -0.10, 0.20));
+
+//   // Start with a camera on x-axis looking at origin
+//   double radius = 30;
+//   const Point3 up(0, 0, 1), target(0, 0, 0);
+//   const Point3 position(radius, 0, 0);
+//   const auto camera = PinholeCamera<Cal3_S2>::Lookat(position, target, up);
+//   const auto pose_0 = camera.pose();
+
+//   // Now, create a constant-twist scenario that makes the camera orbit the
+//   // origin
+//   double angular_velocity = M_PI,  // rad/sec
+//       delta_t = 1.0 / 18;          // makes for 10 degrees per step
+//   Vector3 angular_velocity_vector(0, -angular_velocity, 0);
+//   Vector3 linear_velocity_vector(radius * angular_velocity, 0, 0);
+//   auto scenario = ConstantTwistScenario(angular_velocity_vector,
+//                                         linear_velocity_vector, pose_0);
+
+//   // Create a factor graph
+//   NonlinearFactorGraph newgraph;
+
+//   // Create (incremental) ISAM2 solver
+//   ISAM2 isam;
+
+//   // Create the initial estimate to the solution
+//   // Intentionally initialize the variables off from the ground truth
+//   Values initialEstimate, totalEstimate, result;
+
+//   // Add a prior on pose x0. This indirectly specifies where the origin is.
+//   // 0.1 rad std on roll, pitch, yaw, 30cm std on x,y,z.
+//   auto noise = noiseModel::Diagonal::Sigmas(
+//       (Vector(6) << Vector3::Constant(0.1), Vector3::Constant(0.3)).finished());
+//   newgraph.addPrior(X(0), pose_0, noise);
+
+//   // Add imu priors
+//   Key biasKey = Symbol('b', 0);
+//   auto biasnoise = noiseModel::Diagonal::Sigmas(Vector6::Constant(0.1));
+//   newgraph.addPrior(biasKey, imuBias::ConstantBias(), biasnoise);
+//   initialEstimate.insert(biasKey, imuBias::ConstantBias());
+//   auto velnoise = noiseModel::Diagonal::Sigmas(Vector3(0.1, 0.1, 0.1));
+
+//   Vector n_velocity(3);
+//   n_velocity << 0, angular_velocity * radius, 0;
+//   newgraph.addPrior(V(0), n_velocity, velnoise);
+
+//   initialEstimate.insert(V(0), n_velocity);
+
+//   // IMU preintegrator
+//   PreintegratedImuMeasurements accum(params);
+
+//   // Simulate poses and imu measurements, adding them to the factor graph
+//   for (size_t i = 0; i < 36; ++i) {
+//     double t = i * delta_t;
+//     if (i == 0) {  // First time add two poses
+//       auto pose_1 = scenario.pose(delta_t);
+//       initialEstimate.insert(X(0), pose_0.compose(delta));
+//       initialEstimate.insert(X(1), pose_1.compose(delta));
+//     } else if (i >= 2) {  // Add more poses as necessary
+//       auto pose_i = scenario.pose(t);
+//       initialEstimate.insert(X(i), pose_i.compose(delta));
+//     }
+
+//     if (i > 0) {
+//       // Add Bias variables periodically
+//       if (i % 5 == 0) {
+//         biasKey++;
+//         Symbol b1 = biasKey - 1;
+//         Symbol b2 = biasKey;
+//         Vector6 covvec;
+//         covvec << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
+//         auto cov = noiseModel::Diagonal::Variances(covvec);
+//         auto f = boost::make_shared<BetweenFactor<imuBias::ConstantBias> >(
+//             b1, b2, imuBias::ConstantBias(), cov);
+//         newgraph.add(f);
+//         initialEstimate.insert(biasKey, imuBias::ConstantBias());
+//       }
+//       // Predict acceleration and gyro measurements in (actual) body frame
+//       Vector3 measuredAcc = scenario.acceleration_b(t) -
+//                             scenario.rotation(t).transpose() * params->n_gravity;
+//       Vector3 measuredOmega = scenario.omega_b(t);
+//       accum.integrateMeasurement(measuredAcc, measuredOmega, delta_t);
+
+//       // Add Imu Factor
+//       ImuFactor imufac(X(i - 1), V(i - 1), X(i), V(i), biasKey, accum);
+//       newgraph.add(imufac);
+
+//       // insert new velocity, which is wrong
+//       initialEstimate.insert(V(i), n_velocity);
+//       accum.resetIntegration();
+//     }
+
+//     // Incremental solution
+//     isam.update(newgraph, initialEstimate);
+//     result = isam.calculateEstimate();
+//     newgraph = NonlinearFactorGraph();
+//     initialEstimate.clear();
+//   }
+//   GTSAM_PRINT(result);
+//   return 0;
+// }
+// /* ************************************************************************* */
  
  

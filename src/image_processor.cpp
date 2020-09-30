@@ -13,8 +13,8 @@
 #include <sensor_msgs/image_encodings.h>
 #include <random_numbers/random_numbers.h>
 
-#include <factor_graph/CameraMeasurement.h>
-#include <factor_graph/TrackingInfo.h>
+#include <periodic_slam/CameraMeasurement.h>
+#include <periodic_slam/TrackingInfo.h>
 #include <image_processor.h>
 #include <utils.h>
 
@@ -87,7 +87,7 @@ bool ImageProcessor::loadParameters() {
   cam1_distortion_coeffs[2] = cam1_distortion_coeffs_temp[2];
   cam1_distortion_coeffs[3] = cam1_distortion_coeffs_temp[3];
 
-  cout << cam1_distortion_coeffs[0] << endl;
+  // cout << cam1_distortion_coeffs[0] << endl;
   cv::Mat     T_imu_cam0 = utils::getTransformCV(nh, "cam0/T_cam_imu");
   cv::Matx33d R_imu_cam0(T_imu_cam0(cv::Rect(0,0,3,3)));
   cv::Vec3d   t_imu_cam0 = T_imu_cam0(cv::Rect(3,0,1,3));
@@ -177,9 +177,9 @@ bool ImageProcessor::loadParameters() {
 }
 
 bool ImageProcessor::createRosIO() {
-  feature_pub = nh.advertise<factor_graph::CameraMeasurement>(
+  feature_pub = nh.advertise<periodic_slam::CameraMeasurement>(
       "features", 3);
-  tracking_info_pub = nh.advertise<factor_graph::TrackingInfo>(
+  tracking_info_pub = nh.advertise<periodic_slam::TrackingInfo>(
       "tracking_info", 1);
   image_transport::ImageTransport it(nh);
   debug_stereo_pub = it.advertise("debug_stereo_image", 1);
@@ -1246,7 +1246,7 @@ void ImageProcessor::twoPointRansac(
 void ImageProcessor::publish() {
 
   // Publish features.
-  factor_graph::CameraMeasurementPtr feature_msg_ptr(new factor_graph::CameraMeasurement);
+  periodic_slam::CameraMeasurementPtr feature_msg_ptr(new periodic_slam::CameraMeasurement);
   feature_msg_ptr->header.stamp = cam0_curr_img_ptr->header.stamp;
 
   vector<FeatureIDType> curr_ids(0);
@@ -1257,7 +1257,7 @@ void ImageProcessor::publish() {
     for (const auto& feature : grid_features.second) {
       curr_ids.push_back(feature.id);
       curr_cam0_points.push_back(feature.cam0_point);
-      std::cout << feature.cam0_point << endl;
+      //std::cout << feature.cam0_point << endl;
       curr_cam1_points.push_back(feature.cam1_point);
     }
   }
@@ -1282,7 +1282,7 @@ void ImageProcessor::publish() {
   // }
 
   for (int i = 0; i < curr_ids.size(); ++i) {
-    feature_msg_ptr->features.push_back(factor_graph::FeatureMeasurement());
+    feature_msg_ptr->features.push_back(periodic_slam::FeatureMeasurement());
     feature_msg_ptr->features[i].id = curr_ids[i];
     feature_msg_ptr->features[i].u0 = curr_cam0_points[i].x;
     feature_msg_ptr->features[i].v0 = curr_cam0_points[i].y;
@@ -1293,7 +1293,7 @@ void ImageProcessor::publish() {
   feature_pub.publish(feature_msg_ptr);
 
   // Publish tracking info.
-  factor_graph::TrackingInfoPtr tracking_info_msg_ptr(new factor_graph::TrackingInfo());
+  periodic_slam::TrackingInfoPtr tracking_info_msg_ptr(new periodic_slam::TrackingInfo());
   tracking_info_msg_ptr->header.stamp = cam0_curr_img_ptr->header.stamp;
   tracking_info_msg_ptr->before_tracking = before_tracking;
   tracking_info_msg_ptr->after_tracking = after_tracking;

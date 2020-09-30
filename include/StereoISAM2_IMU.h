@@ -22,12 +22,13 @@
 #include "parameters.h"
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
-#include <StereoISAM2.h>
 #include <geometry_msgs/Twist.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
-#include <factor_graph/CameraMeasurement.h>
+#include <periodic_slam/CameraMeasurement.h>
 #include <pcl/common/centroid.h>
+#include <sensor_msgs/Imu.h>
+
  
 
  
@@ -105,7 +106,7 @@ private:
     image_transport::SubscriberFilter left_sub;
     image_transport::SubscriberFilter right_sub;
     ros::Subscriber gtSUB;
-    ros::Subscriber camSub;
+    ros::Subscriber imuSub;
 
     image_transport::Publisher debug_pub;
     ros::Publisher pose_pub;
@@ -115,7 +116,7 @@ private:
 
 
     void imageCallback(const sensor_msgs::ImageConstPtr& left_msg, const sensor_msgs::ImageConstPtr& right_msg);
-    void camCallback(const factor_graph::CameraMeasurementPtr& camera_msg);
+    void imuCallback(const sensor_msgs::Imu &imu_msg);
     void sendTfs();
     static void GTCallback(const geometry_msgs::Twist &msg);
 

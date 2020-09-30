@@ -30,7 +30,7 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/common/centroid.h>
-#include <factor_graph/CameraMeasurement.h>
+#include <periodic_slam/CameraMeasurement.h>
 
 
 #include <fstream>
@@ -132,9 +132,9 @@ void StereoISAM2::initializeFactorGraph(){
 
  
 
-void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_msg){
+void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
         cout << "got message"<< endl;
-        vector<factor_graph::FeatureMeasurement> feature_vector = camera_msg->features;
+        vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         initialEstimate.insert(X(frame), currPose);
  
         int radius = 2;
@@ -145,7 +145,7 @@ void StereoISAM2::camCallback(const factor_graph::CameraMeasurementPtr& camera_m
         gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
 
         for (int i = 0; i < feature_vector.size(); i++){
-            factor_graph::FeatureMeasurement feature = feature_vector[i];
+            periodic_slam::FeatureMeasurement feature = feature_vector[i];
             int landmark_id = feature.id;
             double uL = feature.u0;
             double uR = feature.u1;

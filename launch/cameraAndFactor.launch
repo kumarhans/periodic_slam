@@ -29,7 +29,7 @@ s
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/slowForward.bag " /> 
      -->
 
-    <node name="Graph" pkg="periodic_slam" type="stereoISAM2" respawn="false" output="screen">
+    <node name="Graph" pkg="periodic_slam" type="stereoISAM2_IMU" respawn="false" output="screen">
     </node>
 
     <node type="rviz" name="rviz" pkg="rviz" args="-d $(find periodic_slam)/rviz/factor.config.rviz"  />
