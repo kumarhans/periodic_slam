@@ -13,13 +13,15 @@ This package performs state estimation periodically
 
 - [Robot Operating System (ROS)](http://wiki.ros.org) (middleware for robotics),
 - [Eigen] (linear algebra library)
+- [gtsam](https://github.com/borglab/gtsam) (backend graph optimization) 
+- [OpenCV] 
 
 #### Building
 
 To build from source, clone the latest version from this repository into your catkin workspace and compile the package using
 
 	cd catkin_workspace/src
-	git clone 
+	git clone https://github.com/kumarhans/periodic_slam.git
 	cd ../
 	catkin_make
 
@@ -30,7 +32,9 @@ Describe the quickest way to run this software, for example:
 
 Run the main node with
 
-	roslaunch ros_package_template ros_package_template.launch
+	roslaunch periodic_slam cameraAndFactor.launch
+	
+
 
 ## Config files
 
