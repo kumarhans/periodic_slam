@@ -31,13 +31,12 @@ To build from source, clone the latest version from this repository into your ca
 
 ## Usage
 
-Describe the quickest way to run this software, for example:
-
-Run the main node with
+Run the main visual odometry node with
 
 	roslaunch periodic_slam cameraAndFactor.launch
 	
 
+## NEED TO FINISH WRITING REST OF README
 
 ## Config files
 
