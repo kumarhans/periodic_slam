@@ -67,7 +67,7 @@ public:
     cv::Mat pose;
     nav_msgs::Path path;
     gtsam::Pose3 currPose; 
-    inline static gtsam::Pose3 gtPose;
+    static gtsam::Pose3 gtPose;
     gtsam::Values currentEstimate;
   
  
@@ -76,8 +76,8 @@ public:
     int frame;
  
     
-    inline static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr{new pcl::PointCloud<pcl::PointXYZRGB>()};
-   
+
+    static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
      
   
     

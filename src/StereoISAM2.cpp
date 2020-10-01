@@ -63,10 +63,27 @@ StereoISAM2::~StereoISAM2 () {
 }
 
  
+Pose3 StereoISAM2::gtPose{
+  []{
+    Pose3 a;
+    return a;
+  }() // Call the lambda right away
+};
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
+  []{
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptrs(new pcl::PointCloud<pcl::PointXYZRGB>());
+    return landmark_cloud_msg_ptrs;
+  }() // Call the lambda right away
+};
+
+
+//pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+
 
 void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
 {
-  gtPose = Pose3(Rot3::ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
+  gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
 }
 
 void StereoISAM2::sendTfs(){
@@ -111,14 +128,16 @@ void StereoISAM2::initializeSubsAndPubs(){
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
     path_pub = nh.advertise<nav_msgs::Path>("/vo/path", 1);
- 
+    
+    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+    
 }
 
 void StereoISAM2::initializeFactorGraph(){
     ISAM2Params parameters;
     parameters.relinearizeThreshold = 0.1;
     ISAM2 isam(parameters);
-    currPose = Pose3(Rot3::ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
+    currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
 
     landmark = 0;
     frame = 0;
@@ -133,7 +152,6 @@ void StereoISAM2::initializeFactorGraph(){
  
 
 void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
-        cout << "got message"<< endl;
         vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         initialEstimate.insert(X(frame), currPose);
  
@@ -160,8 +178,8 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             double y = (v-cy)*z/fy;
             
             Point3 camera_point = Point3(x,y,z); 
-            Point3 body_point = bodyToSensor.transform_from(camera_point);
-            Point3 world_point = currPose.transform_from(body_point) ;
+            Point3 body_point = bodyToSensor.transformFrom(camera_point);
+            Point3 world_point = currPose.transformFrom(body_point) ;
 
             pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,0,100);
             pcl_world_point.x = world_point.x();

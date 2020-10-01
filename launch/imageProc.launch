@@ -7,43 +7,10 @@
   <!-- <arg name="calibration_file"
     default="$(find gtsam_vio)/config/zed_imu_camera_altered.yaml"/> -->
   <arg name="calibration_file"
-    default="$(find gtsam_vio)/config/hans.yaml"/>
+    default="$(find periodic_slam)/config/hans.yaml"/>
 
-  <!-- iSAM2 Variables -->
-  <!-- <arg name="images_compressed" default="true"/>
-  <arg name="camera_left_topic_id" default="/zed/zed_node/left/image_rect_color"/>
-  <arg name="camera_right_topic_id" default="/zed/zed_node/right/image_rect_color"/>
-  <arg name="imu_topic_id" default="/zed/zed_node/imu/data"/>
-  <arg name="world_frame_id" value="world"/> -->
+ 
   
-  <!-- iSAM2 Parameters -->
-  <!-- <rosparam command="load" file="$(arg calibration_file)"/>
-  <param name="feature_topic_id" value="/$(arg robot)/image_processor/features"/>
-  <param name="imu_topic_id" value="$(arg imu_topic_id)"/>
-  <param name="odom_topic_id" value="/zed/zed_node/odom"/>
-  <param name="camera_frame_id" value="zed_left_camera_optical_frame"/>
-  <param name="robot_frame_id" value="$(arg robot)"/>
-  <param name="world_frame_id" value="$(arg world_frame_id)"/> -->
-  
-   
-     
-  <!-- <node pkg="nodelet" type="nodelet" output="screen" name="image_processor"
-    args="standalone gtsam_vio/ImageProcessorNodelet">  
-    
-    <rosparam command="load" file="$(arg calibration_file)"/>
-    <param name="grid_row" value="3"/>
-    <param name="grid_col" value="4"/>
-    <param name="grid_min_feature_num" value="3"/>
-    <param name="grid_max_feature_num" value="4"/>
-    <param name="pyramid_levels" value="3"/>
-    <param name="patch_size" value="15"/>
-    <param name="fast_threshold" value="10"/>
-    <param name="max_iteration" value="30"/>
-    <param name="track_precision" value="0.01"/>
-    <param name="ransac_threshold" value="3"/>
-    <param name="stereo_threshold" value="5"/>
-  
-  </node> -->
   <!-- iSAM2 Variables -->
   <arg name="images_compressed" default="true"/>
   <arg name="camera_left_topic_id" default="/left_r200/camera/color/image_raw"/>

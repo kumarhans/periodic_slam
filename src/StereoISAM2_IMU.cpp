@@ -64,10 +64,26 @@ StereoISAM2::~StereoISAM2 () {
 }
 
  
+Pose3 StereoISAM2::gtPose{
+  []{
+    Pose3 a;
+    return a;
+  }() // Call the lambda right away
+};
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
+  []{
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptrs(new pcl::PointCloud<pcl::PointXYZRGB>());
+    return landmark_cloud_msg_ptrs;
+  }() // Call the lambda right away
+};
+
+
+
 
 void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
 {
-  gtPose = Pose3(Rot3::ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
+  gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
 }
 
 void StereoISAM2::sendTfs(){
@@ -105,21 +121,21 @@ void StereoISAM2::sendTfs(){
 
 void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
- 
+
     gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
     imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
  
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
     path_pub = nh.advertise<nav_msgs::Path>("/vo/path", 1);
- 
+   
 }
 
 void StereoISAM2::initializeFactorGraph(){
     ISAM2Params parameters;
     parameters.relinearizeThreshold = 0.1;
     ISAM2 isam(parameters);
-    currPose = Pose3(Rot3::ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
+    currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
 
     landmark = 0;
     frame = 0;
