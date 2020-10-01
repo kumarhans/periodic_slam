@@ -28,6 +28,8 @@
 #include <periodic_slam/CameraMeasurement.h>
 #include <pcl/common/centroid.h>
 #include <sensor_msgs/Imu.h>
+#include <gtsam/navigation/ImuBias.h>
+#include <gtsam/navigation/ImuFactor.h>
 
  
 
@@ -67,14 +69,22 @@ public:
     cv::Mat H_curr;
     cv::Mat pose;
     nav_msgs::Path path;
+
     gtsam::Pose3 currPose; 
+    gtsam::Vector3 currVelocity;
+    gtsam::imuBias::ConstantBias currBias;  // assume zero initial bias
+
+
+
     static gtsam::Pose3 gtPose;
     gtsam::Values currentEstimate;
-  
+    double kGravity;
+    boost::shared_ptr<gtsam::PreintegrationParams> IMUparams;
  
 
     int landmark;
     int frame;
+    int bias;
  
     
     static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
@@ -94,6 +104,8 @@ private:
 
     gtsam::NonlinearFactorGraph graph;
     gtsam::Values initialEstimate;
+    gtsam::PreintegratedImuMeasurements accum;
+
     std::map<size_t, gtsam::SmartStereoProjectionPoseFactor::shared_ptr> smartFactors;
     //gtsam::Cal3_S2Stereo::shared_ptr K;
 
