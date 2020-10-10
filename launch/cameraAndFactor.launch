@@ -25,7 +25,7 @@ s
     <node pkg="camera_gazebo" type="camera_control_pos.py" name="camera_controller" output="screen">
     </node>  -->
 
-    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hans/Downloads/downOnly.bag " /> 
+    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hans/Downloads/mobilRobot.bag " /> 
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/slowForward.bag " /> 
      -->
 

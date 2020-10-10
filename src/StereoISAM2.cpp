@@ -199,7 +199,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                 
             // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
             // Add prior to the landmark as well    
-            graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
+            //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
 
             
         }
@@ -247,7 +247,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         currentEstimate = isam.calculateEstimate();
         currPose = currentEstimate.at<Pose3>(X(frame));
 
-        graph.resize(30);
+        graph.resize(0);
         initialEstimate.clear();
         frame ++;
 }

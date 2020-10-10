@@ -73,6 +73,13 @@ Pose3 StereoISAM2::gtPose{
   }() // Call the lambda right away
 };
 
+Pose3 StereoISAM2::gtPoseLast{
+  []{
+    Pose3 a;
+    return a;
+  }() // Call the lambda right away
+};
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
   []{
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptrs(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -85,6 +92,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
 
 void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
 {
+  //gtPoseLast = gtPose.clone();
   gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
 }
 
@@ -139,7 +147,7 @@ void StereoISAM2::initializeFactorGraph(){
     ISAM2 isam(parameters);
     currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
 
-    kGravity = 9.81;
+    kGravity = 0.0; //simulation imu does not record gravity 
     IMUparams = PreintegrationParams::MakeSharedU(kGravity);
     IMUparams->setAccelerometerCovariance(I_3x3 * 0.1);
     IMUparams->setGyroscopeCovariance(I_3x3 * 0.1);
@@ -193,6 +201,7 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
         initialEstimate.insert(B(bias), imuBias::ConstantBias());
       }
       // Predict acceleration and gyro measurements in (actual) body frame
+      //double simMeas = gtPose.x() - gtPoseLast.x();
       Vector3 measuredAcc(lA.x,lA.y,lA.z);
       Vector3 measuredOmega(aV.x,aV.y,aV.z);
       accum.integrateMeasurement(measuredAcc, measuredOmega, dt);
@@ -211,7 +220,7 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
     currPose = currentEstimate.at<Pose3>(X(frame));
     currVelocity = currentEstimate.at<Vector3>(V(frame));
     currBias = currentEstimate.at<imuBias::ConstantBias>(B(bias));
-    cout << currPose << endl;
+    //cout << currVelocity << endl;
     graph.resize(0);
     sendTfs();
     //graph = NonlinearFactorGraph();

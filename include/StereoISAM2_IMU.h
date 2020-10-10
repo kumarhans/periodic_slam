@@ -77,6 +77,7 @@ public:
 
 
     static gtsam::Pose3 gtPose;
+    static gtsam::Pose3 gtPoseLast;
     gtsam::Values currentEstimate;
     double kGravity;
     boost::shared_ptr<gtsam::PreintegrationParams> IMUparams;
