@@ -22,12 +22,16 @@
 #include "parameters.h"
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
-#include <StereoISAM2.h>
 #include <geometry_msgs/Twist.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <periodic_slam/CameraMeasurement.h>
 #include <pcl/common/centroid.h>
+#include <sensor_msgs/Imu.h>
+#include <gtsam/navigation/ImuBias.h>
+#include <gtsam/navigation/ImuFactor.h>
+#include <gazebo_msgs/LinkStates.h>
+
  
 
  
@@ -38,86 +42,58 @@ public:
     StereoISAM2(ros::NodeHandle &nodehandle,image_transport::ImageTransport &imagehandle);
     ~StereoISAM2();
 
-    bool init;
-    bool depthMap;
-    bool visualize;
-
-    cv::Mat prev_image_left;
-    cv::Mat prev_image_right;
-
-    cv::Mat curr_image_left;
-    cv::Mat curr_image_right;
-
-    cv::Mat features0;
-    cv::Mat features1;
-    
+    //Visualization Paramters
+    bool visualize;    
     cv::Mat debug_image;
+    nav_msgs::Path pathGT;
+    nav_msgs::Path pathOPTI;
+    static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
 
-    std::vector<cv::Point2f> currPoints;
-    std::vector<cv::Point2f> prevPoints;
-    std::vector<cv::KeyPoint> keypoints;
-
-    cv::Mat disparity;
-    cv::Mat Q;
-    cv::Mat depth_map_prev;
-    cv::Mat depth_map_curr;
-
-    cv::Mat H_init;
-    cv::Mat H_curr;
-    cv::Mat pose;
-    nav_msgs::Path path;
+    //Initialize State of Robot
     gtsam::Pose3 currPose; 
+    gtsam::Vector3 currVelocity;
+    gtsam::imuBias::ConstantBias currBias;  // assume zero initial bias
     static gtsam::Pose3 gtPose;
-    gtsam::Values currentEstimate;
-  
- 
-
     int landmark;
     int frame;
- 
-    
+    int bias;
 
-    static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
-     
-  
+    //Initilize GTSAM Variables
+    gtsam::ISAM2 isam;
+    gtsam::NonlinearFactorGraph graph;
+    gtsam::Values initialEstimate;
+    gtsam::Values currentEstimate;
+
+    boost::shared_ptr<gtsam::PreintegrationParams> IMUparams;
+    gtsam::PreintegratedImuMeasurements accum;
+    double kGravity;
+
     
 private:
 
     void initializeSubsAndPubs();
     void initializeFactorGraph();
-    void addFactors();
-    void addVisualFactor(int frameNum, int landmarkNum, int ul, int ur, int v);
-
-    void getInitialRot(double angleDown, double height);
-    void visualizePoints(std::vector<cv::Point3f>& currWorldPoints, std::vector<cv::Point3f>& prevWorldPoints);
-    gtsam::ISAM2 isam;
-
-    gtsam::NonlinearFactorGraph graph;
-    gtsam::Values initialEstimate;
-    std::map<size_t, gtsam::SmartStereoProjectionPoseFactor::shared_ptr> smartFactors;
-    //gtsam::Cal3_S2Stereo::shared_ptr K;
-
-    
-
+     
+    //Ros Subscribers
     ros::NodeHandle nh;
     image_transport::ImageTransport it;
-
-    image_transport::SubscriberFilter left_sub;
-    image_transport::SubscriberFilter right_sub;
-    ros::Subscriber gtSUB;
+    ros::Subscriber imuSub;
+    ros::Subscriber gazSub;
     ros::Subscriber camSub;
 
+    //Ros Publishers
     image_transport::Publisher debug_pub;
     ros::Publisher pose_pub;
-    ros::Publisher path_pub;
-    ros::Publisher vis_pub;
+    ros::Publisher pathOPTI_pub;
+    ros::Publisher pathGT_pub;
     ros::Publisher point_pub;
 
-
-    void imageCallback(const sensor_msgs::ImageConstPtr& left_msg, const sensor_msgs::ImageConstPtr& right_msg);
+    //Ros Callbacks
     void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);
+    void imuCallback(const sensor_msgs::Imu &imu_msg);
     void sendTfs();
     static void GTCallback(const geometry_msgs::Twist &msg);
+    static void gazCallback(const gazebo_msgs::LinkStates &msgs);
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> *sync;

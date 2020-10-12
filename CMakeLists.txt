@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   pcl_conversions
   pcl_ros
+  gazebo_msgs
 )
 
 find_package(GTSAM REQUIRED QUIET)

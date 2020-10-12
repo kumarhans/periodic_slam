@@ -30,6 +30,7 @@
 #include <sensor_msgs/Imu.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/ImuFactor.h>
+#include <gazebo_msgs/LinkStates.h>
 
  
 
@@ -68,7 +69,8 @@ public:
     cv::Mat H_init;
     cv::Mat H_curr;
     cv::Mat pose;
-    nav_msgs::Path path;
+    nav_msgs::Path pathGT;
+    nav_msgs::Path pathOPTI;
 
     gtsam::Pose3 currPose; 
     gtsam::Vector3 currVelocity;
@@ -119,18 +121,22 @@ private:
     image_transport::SubscriberFilter right_sub;
     ros::Subscriber gtSUB;
     ros::Subscriber imuSub;
+    ros::Subscriber gazSub;
 
     image_transport::Publisher debug_pub;
     ros::Publisher pose_pub;
-    ros::Publisher path_pub;
+    ros::Publisher pathOPTI_pub;
+    ros::Publisher pathGT_pub;
+    
     ros::Publisher vis_pub;
     ros::Publisher point_pub;
 
 
-    void imageCallback(const sensor_msgs::ImageConstPtr& left_msg, const sensor_msgs::ImageConstPtr& right_msg);
+    void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);
     void imuCallback(const sensor_msgs::Imu &imu_msg);
     void sendTfs();
     static void GTCallback(const geometry_msgs::Twist &msg);
+    static void gazCallback(const gazebo_msgs::LinkStates &msgs);
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> *sync;

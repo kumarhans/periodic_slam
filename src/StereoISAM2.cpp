@@ -52,14 +52,10 @@ using symbol_shorthand::L;
 StereoISAM2::StereoISAM2(ros::NodeHandle &nodehandle,image_transport::ImageTransport &imagehandle):nh(nodehandle),it(imagehandle){
     initializeSubsAndPubs();
     initializeFactorGraph();
-    init = false;
 }
 
 StereoISAM2::~StereoISAM2 () {
     delete sync;
-    for (auto i : smartFactors){
-        i.second->~SmartStereoProjectionPoseFactor();
-    }
 }
 
  
@@ -78,13 +74,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
 };
 
 
-//pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 
-
-void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
-{
-  gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
-}
 
 void StereoISAM2::sendTfs(){
     static tf::TransformBroadcaster br;
@@ -122,12 +112,13 @@ void StereoISAM2::sendTfs(){
 void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
  
-    gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
+    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback);
     camSub = nh.subscribe("features", 1000, &StereoISAM2::camCallback, this);
  
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
-    path_pub = nh.advertise<nav_msgs::Path>("/vo/path", 1);
+    pathOPTI_pub = nh.advertise<nav_msgs::Path>("/vo/pathOPTI", 1);
+    pathGT_pub = nh.advertise<nav_msgs::Path>("/vo/pathGT", 1);
     
     //pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
     
@@ -156,7 +147,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         initialEstimate.insert(X(frame), currPose);
  
         int radius = 2;
-        cv::Mat debug = curr_image_left.clone();
+        
 
         noiseModel::Isotropic::shared_ptr prior_landmark_noise = noiseModel::Isotropic::Sigma(3, 0.1);
         noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 10.0); // one pixel in u and v
@@ -169,7 +160,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             double uR = feature.u1;
             double v = feature.v0;
 
-            cv::circle(debug, cvPoint(uL, v), radius*3, CV_RGB(255, 0, 0));
+            //cv::circle(debug, cvPoint(uL, v), radius*3, CV_RGB(255, 0, 0));
             //addVisualFactor(frame, landmark_id, uL, uR, v);
 
             double d = uL - uR;
@@ -198,7 +189,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                 pose_landmark_noise, X(frame), L(landmark_id), K,bodyToSensor);
                 
             // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
-            // Add prior to the landmark as well    
+            //Add prior to the landmark as well    
             //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
 
             
@@ -207,17 +198,23 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         geometry_msgs::PoseStamped poseStamped;
         poseStamped.header.frame_id="/world";
         poseStamped.header.stamp = ros::Time::now();
-     
- 
+    
+
         poseStamped.pose.position.x =  currPose.x();
         poseStamped.pose.position.y = currPose.y();
         poseStamped.pose.position.z = currPose.z();
+        pathOPTI.header.frame_id = "world";
+        pathOPTI.poses.push_back(poseStamped);
+        pathOPTI.header.stamp = poseStamped.header.stamp;
+        pathOPTI_pub.publish(pathOPTI);
 
-
-        path.header.frame_id = "world";
-        path.poses.push_back(poseStamped);
-        path.header.stamp = poseStamped.header.stamp;
-        path_pub.publish(path);
+        poseStamped.pose.position.x =  gtPose.x();
+        poseStamped.pose.position.y = gtPose.y();
+        poseStamped.pose.position.z = gtPose.z();
+        pathGT.header.frame_id = "world";
+        pathGT.poses.push_back(poseStamped);
+        pathGT.header.stamp = poseStamped.header.stamp;
+        pathGT_pub.publish(pathGT);
 
 
 
@@ -230,12 +227,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         landmark_cloud_msg_ptr->clear();
         sendTfs();
 
-        
-        
-
-
-        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", debug).toImageMsg();
-        debug_pub.publish(msg);
+    
         
 
         isam.update(graph, initialEstimate);
@@ -252,6 +244,9 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         frame ++;
 }
  
+void StereoISAM2::gazCallback(const gazebo_msgs::LinkStates &msgs){
+    gtPose = Pose3(Rot3::Quaternion(msgs.pose[7].orientation.w, msgs.pose[7].orientation.x, msgs.pose[7].orientation.y,msgs.pose[7].orientation.z), Point3(msgs.pose[7].position.x, msgs.pose[7].position.y, msgs.pose[7].position.z));
+}
     
  
 

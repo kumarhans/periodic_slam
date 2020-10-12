@@ -11,7 +11,7 @@
 
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
-#include <StereoISAM2_IMU.h>
+#include <StereoISAM2.h>
 //Libraries for Image Stuff
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
@@ -34,6 +34,7 @@
 #include <periodic_slam/CameraMeasurement.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/ImuFactor.h>
+#include <gazebo_msgs/LinkStates.h>
 
 
 #include <fstream>
@@ -55,14 +56,10 @@ using symbol_shorthand::L;
 StereoISAM2::StereoISAM2(ros::NodeHandle &nodehandle,image_transport::ImageTransport &imagehandle):nh(nodehandle),it(imagehandle){
     initializeSubsAndPubs();
     initializeFactorGraph();
-    init = false;
 }
 
 StereoISAM2::~StereoISAM2 () {
     delete sync;
-    for (auto i : smartFactors){
-        i.second->~SmartStereoProjectionPoseFactor();
-    }
 }
 
  
@@ -73,12 +70,6 @@ Pose3 StereoISAM2::gtPose{
   }() // Call the lambda right away
 };
 
-Pose3 StereoISAM2::gtPoseLast{
-  []{
-    Pose3 a;
-    return a;
-  }() // Call the lambda right away
-};
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
   []{
@@ -93,7 +84,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
 void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
 {
   //gtPoseLast = gtPose.clone();
-  gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
+  //gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
+  return;
 }
 
 void StereoISAM2::sendTfs(){
@@ -132,13 +124,15 @@ void StereoISAM2::sendTfs(){
 void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
 
-    gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
+    //gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
     imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
- 
+    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback);
+    
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
-    path_pub = nh.advertise<nav_msgs::Path>("/vo/path", 1);
-   
+    pathOPTI_pub = nh.advertise<nav_msgs::Path>("/vo/pathOPTI", 1);
+    pathGT_pub = nh.advertise<nav_msgs::Path>("/vo/pathGT", 1);
+
 }
 
 void StereoISAM2::initializeFactorGraph(){
@@ -214,9 +208,38 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
       accum.resetIntegration();
     }
 
+    geometry_msgs::PoseStamped poseStamped;
+    poseStamped.header.frame_id="/world";
+    poseStamped.header.stamp = ros::Time::now();
+  
+
+    poseStamped.pose.position.x =  currPose.x();
+    poseStamped.pose.position.y = currPose.y();
+    poseStamped.pose.position.z = currPose.z();
+    pathOPTI.header.frame_id = "world";
+    pathOPTI.poses.push_back(poseStamped);
+    pathOPTI.header.stamp = poseStamped.header.stamp;
+    pathOPTI_pub.publish(pathOPTI);
+
+    poseStamped.pose.position.x =  gtPose.x();
+    poseStamped.pose.position.y = gtPose.y();
+    poseStamped.pose.position.z = gtPose.z();
+    pathGT.header.frame_id = "world";
+    pathGT.poses.push_back(poseStamped);
+    pathGT.header.stamp = poseStamped.header.stamp;
+    pathGT_pub.publish(pathGT);
+
+    
+
     // Incremental solution
     isam.update(graph, initialEstimate);
     currentEstimate = isam.calculateEstimate();
+    // if (frame == 11){
+    //   ofstream os("test.dot");
+    //   graph.saveGraph(os, initialEstimate);
+    // }
+    
+
     currPose = currentEstimate.at<Pose3>(X(frame));
     currVelocity = currentEstimate.at<Vector3>(V(frame));
     currBias = currentEstimate.at<imuBias::ConstantBias>(B(bias));
@@ -227,6 +250,13 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
     initialEstimate.clear();
     frame ++;
 }
+
+
+void StereoISAM2::gazCallback(const gazebo_msgs::LinkStates &msgs){
+    gtPose = Pose3(Rot3::Quaternion(msgs.pose[7].orientation.w, msgs.pose[7].orientation.x, msgs.pose[7].orientation.y,msgs.pose[7].orientation.z), Point3(msgs.pose[7].position.x, msgs.pose[7].position.y, msgs.pose[7].position.z));
+
+}
+
 
 int main(int argc, char **argv)
 {
