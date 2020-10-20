@@ -143,6 +143,9 @@ void StereoISAM2::initializeFactorGraph(){
  
 
 void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
+
+        //if (gtPose.rotation().pitch() < 0) return;
+
         vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         initialEstimate.insert(X(frame), currPose);
  
@@ -193,7 +196,11 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
 
             
+
         }
+
+        cout << gtPose.rotation().pitch() << endl;
+    
 
         geometry_msgs::PoseStamped poseStamped;
         poseStamped.header.frame_id="/world";
@@ -239,7 +246,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         currentEstimate = isam.calculateEstimate();
         currPose = currentEstimate.at<Pose3>(X(frame));
 
-        graph.resize(0);
+        graph.resize(100);
         initialEstimate.clear();
         frame ++;
 }

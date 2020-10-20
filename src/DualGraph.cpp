@@ -10,16 +10,20 @@
 #include <iostream>
 
 #include "DualGraph.h"
+#include <gazebo_msgs/LinkStates.h>
+#include <gtsam/nonlinear/ISAM2.h>
+#include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
  
  
 using namespace std;
+using namespace gtsam;
 
 DualGraph::DualGraph(ros::NodeHandle &nodehandle,image_transport::ImageTransport &imagehandle):nh_(nodehandle),it_(imagehandle){
     initializeSubsAndPubs();
     // angleHigh = 1000.0;
     // angleLow = -1000.0;
     angleHigh = 1.0;
-    angleLow = .98;
+    angleLow = .4;
     count = 0;
     initializaing = true;
     imageIn = false;
@@ -28,10 +32,20 @@ DualGraph::DualGraph(ros::NodeHandle &nodehandle,image_transport::ImageTransport
 void DualGraph::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
 
-    Leftsub = it_.subscribe("/left_r200/camera/color/image_raw", 0, &DualGraph::imageCallbackLeft,this);
-    Rightsub = it_.subscribe("/right_r200/camera/color/image_raw", 0, &DualGraph::imageCallbackRight,this);
-    gtSUB = nh_.subscribe("/cmd_phase", 1000, &DualGraph::GTCallback,this);
-    poseSUB = nh_.subscribe("/cmd_pos", 100, &DualGraph::poseCallback,this);
+    //cam0_img_sub.subscribe(it,"/DualFactor/down/leftImage", 1);
+    //cam1_img_sub.subscribe(it,"/DualFactor/down/rightImage", 1);
+    Leftsub.subscribe(it_,"/left_r200/camera/color/image_raw", 1);
+    Rightsub.subscribe(it_,"/right_r200/camera/color/image_raw", 1);
+
+    //cam0_img_sub.subscribe(it,"/left_r200/camera/color/image_raw", 1);
+    //cam1_img_sub.subscribe(it,"/right_r200/camera/color/image_raw", 1);
+    sync = new message_filters::Synchronizer<MySyncPolicy> (MySyncPolicy(10), Leftsub, Rightsub);
+    sync -> registerCallback(boost::bind(&DualGraph::stereoCallback, this, _1, _2 ));
+  
+
+    
+    gazSUB = nh_.subscribe("/gazebo/link_states", 1000, &DualGraph::gazCallback,this);
+    //poseSUB = nh_.subscribe("/cmd_pos", 100, &DualGraph::poseCallback,this);
 
     leftPubUp = it_.advertise("/DualFactor/up/leftImage", 1);
     rightPubUp = it_.advertise("/DualFactor/up/rightImage", 1);
@@ -39,50 +53,47 @@ void DualGraph::initializeSubsAndPubs(){
     rightPubDown = it_.advertise("/DualFactor/down/rightImage", 1);
 }
 
-void DualGraph::imageCallbackLeft(const sensor_msgs::ImageConstPtr &msg) {
-    currImageL = msg;
-        //Because we setup right subscriber second, we assume that if this is getting images left one is too (Bad Assumption)
-    if (!imageIn){
-        try {
-        cv_ptr = cv_bridge::toCvShare(msg, "mono8")->image;
-        cout << cv_ptr.empty()<< endl;
-        } catch (cv_bridge::Exception& e) {
-            ROS_ERROR("cv_bridge exception: %s", e.what());
-            imageIn = false;
-            return;
+void DualGraph::stereoCallback(
+    const sensor_msgs::ImageConstPtr& cam0_img,
+    const sensor_msgs::ImageConstPtr& cam1_img) {
+        currImageL = cam0_img;
+        currImageR = cam1_img;
+
+        if (currPitch > .62){
+            leftPubDown.publish(cam0_img);
+            rightPubDown.publish(cam1_img);            
         }
-        imageIn = true;
-    }  
+
+        // if (currPitch > -1){
+        //     leftPubDown.publish(cam0_img);
+        //     rightPubDown.publish(cam1_img);            
+        // }
+
+        //cout << "got imgae" << endl;
+
 }
 
-void DualGraph::imageCallbackRight(const sensor_msgs::ImageConstPtr &msg) {
-    currImageR = msg;
-}
 
-void DualGraph::poseCallback(const geometry_msgs::Twist &msg){
-    static tf::TransformBroadcaster br;
-    GtTransform.setOrigin( tf::Vector3(msg.linear.x,msg.linear.y, msg.linear.z-1.25) );
-    q.setRPY(msg.angular.x, msg.angular.y, msg.angular.z);
-    GtTransform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(GtTransform, ros::Time::now(), "map", "ground_truth"));
+void DualGraph::gazCallback(const gazebo_msgs::LinkStates &msgs){
+    currPitch = Rot3::Quaternion(msgs.pose[7].orientation.w, msgs.pose[7].orientation.x, msgs.pose[7].orientation.y,msgs.pose[7].orientation.z).pitch();   
 }
-
-void DualGraph::GTCallback(const std_msgs::Float64 &msg) {
-    currPitch = msg.data;
-    count += 1;
     
-    if (currPitch != 0.0){
-        DualGraph::initializaing = false;
-    }            
-    if (((currPitch > - angleHigh && currPitch < -angleLow) || DualGraph::initializaing) && imageIn && (count % 30 == 0)) {
-        //cout << currPitch << endl;
-        leftPubUp.publish(currImageL);
-        rightPubUp.publish(currImageR);
-    } else if (((currPitch > angleLow && currPitch < angleHigh) || DualGraph::initializaing) && imageIn && (count % 30 == 0)){
-        leftPubDown.publish(currImageL);
-        rightPubDown.publish(currImageR);
-    }
-        
+int main(int argc, char **argv)
+{
+  //Iitialize ROS and Subscribers
+  ros::init(argc, argv, "DualGrapher");
+  ros::NodeHandle nh; 
+  image_transport::ImageTransport it(nh);
+
+  DualGraph grapher(nh, it);
+  ros::Rate loop_rate(100);
+
+  while (ros::ok()) {        
+    ros::spinOnce();
+    loop_rate.sleep();
+  }
+
+
+  return 0;
 }
 
- 

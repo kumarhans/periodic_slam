@@ -189,8 +189,13 @@ bool ImageProcessor::createRosIO() {
   // stereo_sub.connectInput(cam0_img_sub, cam1_img_sub);
   // stereo_sub.registerCallback(&ImageProcessor::stereoCallback, this);
 
-  cam0_img_sub.subscribe(it,"/left_r200/camera/color/image_raw", 1);
-  cam1_img_sub.subscribe(it,"/right_r200/camera/color/image_raw", 1);
+  
+
+  cam0_img_sub.subscribe(it,"/DualFactor/down/leftImage", 1);
+  cam1_img_sub.subscribe(it,"/DualFactor/down/rightImage", 1);
+
+  //cam0_img_sub.subscribe(it,"/left_r200/camera/color/image_raw", 1);
+  //cam1_img_sub.subscribe(it,"/right_r200/camera/color/image_raw", 1);
   sync = new message_filters::Synchronizer<MySyncPolicy> (MySyncPolicy(10), cam0_img_sub, cam1_img_sub);
   sync -> registerCallback(boost::bind(&ImageProcessor::stereoCallback, this, _1, _2 ));
 

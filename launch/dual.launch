@@ -1,8 +1,6 @@
 <launch>
 
-<rosparam command="load" file="$(find periodic_slam)/config/simulation.yaml" /> 
-
-
+ 
     <!-- <param
         name="robot_description"
         command="$(find xacro)/xacro '$(find camera_gazebo)/urdf/moving_cam_pos.urdf.xacro'"
@@ -16,7 +14,8 @@
         args="-z .5 -urdf -model robot -param robot_description"
     />
  
- 
+s
+
    <node pkg="robot_state_publisher" type="robot_state_publisher"  name="rob_st_pub">
       <param name="publish_frequency" type="double" value="30.0" />
     </node>
@@ -24,15 +23,11 @@
     <node pkg="camera_gazebo" type="camera_control_pos.py" name="camera_controller" output="screen">
     </node>  -->
 
-    <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/Downloads/newCarLargePitch.bag " />  -->
-    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/difficult.bag " /> 
+    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hans/Downloads/gaussNoise01.bag " /> 
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/slowForward.bag " /> 
      -->
-     <node name="Graphs" pkg="periodic_slam" type="dualGraph" respawn="false" output="screen">
-    </node>
 
-
-    <node name="Graph" pkg="periodic_slam" type="stereoISAM2" respawn="false" output="screen">
+    <node name="Graph" pkg="periodic_slam" type="dualGraph" respawn="false" output="screen">
     </node>
 
     <node type="rviz" name="rviz" pkg="rviz" args="-d $(find periodic_slam)/rviz/factor.config.rviz"  />

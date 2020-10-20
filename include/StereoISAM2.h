@@ -11,12 +11,9 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include "opencv2/features2d/features2d.hpp"
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/TransformStamped.h>
-#include <turtlesim/Pose.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/Float64.h>
 #include "parameters.h"
@@ -43,7 +40,7 @@ public:
     ~StereoISAM2();
 
     //Visualization Paramters
-    bool visualize;    
+    // bool visualize;    
     cv::Mat debug_image;
     nav_msgs::Path pathGT;
     nav_msgs::Path pathOPTI;
@@ -57,6 +54,11 @@ public:
     int landmark;
     int frame;
     int bias;
+    double prevAV;
+    int loopKeyDown;
+    int loopKeyUp;
+    double begin;// =ros::Time::now().toSec();
+    
 
     //Initilize GTSAM Variables
     gtsam::ISAM2 isam;
@@ -80,6 +82,7 @@ private:
     ros::Subscriber imuSub;
     ros::Subscriber gazSub;
     ros::Subscriber camSub;
+  
 
     //Ros Publishers
     image_transport::Publisher debug_pub;

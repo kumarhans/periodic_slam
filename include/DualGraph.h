@@ -9,6 +9,14 @@
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 #include <tf/transform_broadcaster.h>
+#include <gazebo_msgs/LinkStates.h>
+
+#include <message_filters/subscriber.h>
+#include <image_transport/subscriber_filter.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
 
 
  
@@ -38,22 +46,24 @@ private:
 
     ros::NodeHandle nh_;
     image_transport::ImageTransport it_;
-    image_transport::Subscriber Leftsub;
-    image_transport::Subscriber Rightsub;
-    ros::Subscriber gtSUB;
+    ros::Subscriber gazSUB;
+    image_transport::SubscriberFilter Leftsub;
+    image_transport::SubscriberFilter Rightsub;
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
+    message_filters::Synchronizer<MySyncPolicy> *sync;
+
+
     ros::Subscriber poseSUB;
     image_transport::Publisher leftPubUp;
     image_transport::Publisher rightPubUp;
     image_transport::Publisher leftPubDown;
     image_transport::Publisher rightPubDown;
 
-    void imageCallbackLeft(const sensor_msgs::ImageConstPtr &msg);
-
-    void imageCallbackRight(const sensor_msgs::ImageConstPtr &msg);
+    void stereoCallback(const sensor_msgs::ImageConstPtr& cam0_img, const sensor_msgs::ImageConstPtr& cam1_img);
 
     void poseCallback(const geometry_msgs::Twist &msg);
 
-    void GTCallback(const std_msgs::Float64 &msg);
+    void gazCallback(const gazebo_msgs::LinkStates &msgs);
 
 };
 

@@ -95,6 +95,10 @@ void StereoISAM2::sendTfs(){
     Point3 t;  
     Rot3 r;  
 
+    std::ofstream myfile;
+    myfile.open ("LoopClosure4.csv", std::ios::app);
+    myfile << (ros::Time::now().toSec() - begin) << ",";
+
     //Send gtsam tf
     t = currPose.translation();
     r = currPose.rotation();
@@ -102,6 +106,10 @@ void StereoISAM2::sendTfs(){
     q.setRPY(r.roll(), r.pitch(), r.yaw());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "Optimized Pose"));
+    myfile << r.roll() << ",";
+    myfile << r.pitch() << ",";
+    myfile << r.yaw() << ",";
+    
 
     //Send ground truth tf
     t = gtPose.translation();
@@ -110,6 +118,10 @@ void StereoISAM2::sendTfs(){
     q.setRPY(r.roll(), r.pitch(), r.yaw());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "True Pose"));
+    myfile << r.roll() << ",";
+    myfile << r.pitch() << ",";
+    myfile << r.yaw() << ",\n";
+  
 
     //Send camera tf
     t = bodyToSensor.translation();
@@ -119,19 +131,30 @@ void StereoISAM2::sendTfs(){
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "True Pose", "Camera"));
 
+    
+    myfile.close();
+  
+
+
+
 }
 
 void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
 
-    //gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
-    imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
-    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback);
+    
     
     debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
     point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
     pathOPTI_pub = nh.advertise<nav_msgs::Path>("/vo/pathOPTI", 1);
     pathGT_pub = nh.advertise<nav_msgs::Path>("/vo/pathGT", 1);
+
+    //gtSUB = nh.subscribe("/cmd_pos", 1000, &StereoISAM2::GTCallback);
+    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback);
+    ros::Duration(0.5).sleep();
+    imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
+
+    begin = ros::Time::now().toSec();
 
 }
 
@@ -151,6 +174,8 @@ void StereoISAM2::initializeFactorGraph(){
 
     frame = 0;
     bias = 0;
+    loopKeyDown = -1;
+    loopKeyUp = -1;
 
  
     // Pose prior 
@@ -182,6 +207,9 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
     initialEstimate.insert(X(frame), currPose);
     initialEstimate.insert(V(frame), currVelocity);
     double dt = .01;
+    std::default_random_engine generator;
+    std::normal_distribution<double> distribution(0.0,0.1);
+    double number = distribution(generator);
 
     if (frame > 0) {  
       if (frame % 5 == 0) {
@@ -195,18 +223,59 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
         initialEstimate.insert(B(bias), imuBias::ConstantBias());
       }
       // Predict acceleration and gyro measurements in (actual) body frame
-      //double simMeas = gtPose.x() - gtPoseLast.x();
       Vector3 measuredAcc(lA.x,lA.y,lA.z);
-      Vector3 measuredOmega(aV.x,aV.y,aV.z);
+      Vector3 measuredOmega(aV.x+number,aV.y+number,aV.z+number);
+
+      if ((signbit(aV.y) != signbit(prevAV)) && frame > 400){
+        if (currPose.rotation().pitch() > .2) {
+          if (loopKeyDown != -1){
+            cout << "loop closure Down" << endl;
+            cout << frame << endl;
+            cout << loopKeyDown << endl;
+
+            Vector6 sigmas;
+            sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
+            auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+            graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyDown), Pose3(), noise);
+          }
+          loopKeyDown = frame;
+        } else if (currPose.rotation().pitch() < -.2){
+          if (loopKeyUp != -1){
+            cout << "loop closure up" << endl;
+            cout << frame << endl;
+            cout << loopKeyUp << endl;
+
+            Vector6 sigmas;
+            sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
+            auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+            graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyUp), Pose3(), noise);
+          }
+          loopKeyUp = frame;
+
+        }
+      }
+
+      
+      prevAV = aV.y;
+      
       accum.integrateMeasurement(measuredAcc, measuredOmega, dt);
 
       // Add Imu Factor
       ImuFactor imufac(X(frame - 1), V(frame - 1), X(frame), V(frame), B(bias), accum);
       graph.add(imufac);
 
+
+      
+
+     
+
       // insert new velocity, which is wrong
       accum.resetIntegration();
     }
+
+    
+
+
 
     geometry_msgs::PoseStamped poseStamped;
     poseStamped.header.frame_id="/world";
@@ -234,7 +303,7 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
     // Incremental solution
     isam.update(graph, initialEstimate);
     currentEstimate = isam.calculateEstimate();
-    // if (frame == 11){
+    // if (frame == 1000){
     //   ofstream os("test.dot");
     //   graph.saveGraph(os, initialEstimate);
     // }
@@ -243,8 +312,13 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
     currPose = currentEstimate.at<Pose3>(X(frame));
     currVelocity = currentEstimate.at<Vector3>(V(frame));
     currBias = currentEstimate.at<imuBias::ConstantBias>(B(bias));
-    //cout << currVelocity << endl;
+   
+    // if (frame > 100){
+    //   cout << currentEstimate.at<Pose3>(X(10)) << endl;
+    // }
+
     graph.resize(0);
+    
     sendTfs();
     //graph = NonlinearFactorGraph();
     initialEstimate.clear();

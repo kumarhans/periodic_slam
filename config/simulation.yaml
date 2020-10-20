@@ -1,6 +1,10 @@
 # Ros Topics
-image0_topic: "/left_r200/camera/color/image_raw"
-image1_topic: "/right_r200/camera/color/image_raw"
+# image0_topic: "/left_r200/camera/color/image_raw"
+# image1_topic: "/right_r200/camera/color/image_raw"
+
+image0_topic: "/DualFactor/down/leftImage"
+image1_topic: "/DualFactor/down/rightImage"
+
 visualize: true
 
 # Intrinsic Camera Paramters
@@ -28,7 +32,7 @@ initX: 0.0
 initY: 0.0
 initZ: 1.3
 initRoll: 0.0
-initPitch: 0.0
+initPitch: 0.62 #0.0
 initYaw: 0.0
 
 
