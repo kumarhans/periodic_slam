@@ -13,6 +13,7 @@
 #include <gazebo_msgs/LinkStates.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
+#include <periodic_slam/PhaseFrames.h>
  
  
 using namespace std;
@@ -32,25 +33,15 @@ DualGraph::DualGraph(ros::NodeHandle &nodehandle,image_transport::ImageTransport
 void DualGraph::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
 
-    //cam0_img_sub.subscribe(it,"/DualFactor/down/leftImage", 1);
-    //cam1_img_sub.subscribe(it,"/DualFactor/down/rightImage", 1);
     Leftsub.subscribe(it_,"/left_r200/camera/color/image_raw", 1);
     Rightsub.subscribe(it_,"/right_r200/camera/color/image_raw", 1);
 
-    //cam0_img_sub.subscribe(it,"/left_r200/camera/color/image_raw", 1);
-    //cam1_img_sub.subscribe(it,"/right_r200/camera/color/image_raw", 1);
     sync = new message_filters::Synchronizer<MySyncPolicy> (MySyncPolicy(10), Leftsub, Rightsub);
     sync -> registerCallback(boost::bind(&DualGraph::stereoCallback, this, _1, _2 ));
-  
-
     
     gazSUB = nh_.subscribe("/gazebo/link_states", 1000, &DualGraph::gazCallback,this);
-    //poseSUB = nh_.subscribe("/cmd_pos", 100, &DualGraph::poseCallback,this);
+    phaseFramePub = nh_.advertise<periodic_slam::PhaseFrames>("/StereoFrames", 1);
 
-    leftPubUp = it_.advertise("/DualFactor/up/leftImage", 1);
-    rightPubUp = it_.advertise("/DualFactor/up/rightImage", 1);
-    leftPubDown = it_.advertise("/DualFactor/down/leftImage", 1);
-    rightPubDown = it_.advertise("/DualFactor/down/rightImage", 1);
 }
 
 void DualGraph::stereoCallback(
@@ -59,15 +50,15 @@ void DualGraph::stereoCallback(
         currImageL = cam0_img;
         currImageR = cam1_img;
 
-        if (currPitch > .62){
-            leftPubDown.publish(cam0_img);
-            rightPubDown.publish(cam1_img);            
-        }
+        periodic_slam::PhaseFrames frame;
+        frame.imageLeft = *cam0_img;
+        frame.imageRight = *cam1_img;
+        frame.pitch = currPitch;
 
-        // if (currPitch > -1){
-        //     leftPubDown.publish(cam0_img);
-        //     rightPubDown.publish(cam1_img);            
-        // }
+        phaseFramePub.publish(frame);
+
+       
+
 
         //cout << "got imgae" << endl;
 

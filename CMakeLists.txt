@@ -32,11 +32,13 @@ add_message_files(
   FeatureMeasurement.msg
   CameraMeasurement.msg
   TrackingInfo.msg
+  PhaseFrames.msg
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
 )
 
 catkin_package(

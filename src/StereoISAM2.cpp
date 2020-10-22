@@ -145,6 +145,8 @@ void StereoISAM2::initializeFactorGraph(){
 void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
 
         //if (gtPose.rotation().pitch() < 0) return;
+        cout << camera_msg->section.data << endl;
+        if (camera_msg->section.data != 1) return;
 
         vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         initialEstimate.insert(X(frame), currPose);

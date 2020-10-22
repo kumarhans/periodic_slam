@@ -24,6 +24,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <periodic_slam/PhaseFrames.h>
 
 namespace gtsam_vio {
 
@@ -67,6 +68,7 @@ private:
     double track_precision;
     double ransac_threshold;
     double stereo_threshold;
+    int section;
   };
 
   /*
@@ -146,8 +148,7 @@ private:
    * @param cam1_img right image.
    */
   void stereoCallback(
-      const sensor_msgs::ImageConstPtr& cam0_img,
-      const sensor_msgs::ImageConstPtr& cam1_img);
+      const periodic_slam::PhaseFrames& framePair);
 
   /*
    * @brief imuCallback
@@ -323,6 +324,7 @@ private:
 
   // Indicate if this is the first image message.
   bool is_first_img;
+  std::vector<bool> first_imgs;
 
   // ID for the next new feature.
   FeatureIDType next_feature_id;
@@ -353,16 +355,28 @@ private:
   cv::Vec3d t_cam1_imu;
 
   // Previous and current images
+  std::vector<cv_bridge::CvImageConstPtr> prev0Ptrs;
+  std::vector<cv_bridge::CvImageConstPtr> curr0Ptrs;
+  std::vector<cv_bridge::CvImageConstPtr> curr1Ptrs;
+
   cv_bridge::CvImageConstPtr cam0_prev_img_ptr;
   cv_bridge::CvImageConstPtr cam0_curr_img_ptr;
   cv_bridge::CvImageConstPtr cam1_curr_img_ptr;
 
   // Pyramids for previous and current image
+  std::vector<std::vector<cv::Mat>> prev0PyrPtrs;
+  std::vector<std::vector<cv::Mat>> curr0PyrPtrs;
+  std::vector<std::vector<cv::Mat>> curr1PyrPtrs;
+
+
   std::vector<cv::Mat> prev_cam0_pyramid_;
   std::vector<cv::Mat> curr_cam0_pyramid_;
   std::vector<cv::Mat> curr_cam1_pyramid_;
 
   // Features in the previous and current image.
+  std::vector<boost::shared_ptr<GridFeatures>> prevFeatPtrs;
+  std::vector<boost::shared_ptr<GridFeatures>> currFeatPtrs;
+
   boost::shared_ptr<GridFeatures> prev_features_ptr;
   boost::shared_ptr<GridFeatures> curr_features_ptr;
 
@@ -375,23 +389,13 @@ private:
   // Ros node handle
   ros::NodeHandle nh;
 
-  // Subscribers and publishers.
-  // message_filters::Subscriber<
-  //   sensor_msgs::Image> cam0_img_sub;
-  // message_filters::Subscriber<
-  //   sensor_msgs::Image> cam1_img_sub;
-  // message_filters::TimeSynchronizer<
-  //   sensor_msgs::Image, sensor_msgs::Image> stereo_sub;
 
-  image_transport::SubscriberFilter cam0_img_sub;
-  image_transport::SubscriberFilter cam1_img_sub;
-  
   ros::Subscriber imu_sub;
+  ros::Subscriber stereoSub;
+
   ros::Publisher feature_pub;
   ros::Publisher tracking_info_pub;
   image_transport::Publisher debug_stereo_pub;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
-  message_filters::Synchronizer<MySyncPolicy> *sync;
 
 
   // Debugging

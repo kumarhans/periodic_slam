@@ -15,6 +15,7 @@
 
 #include <periodic_slam/CameraMeasurement.h>
 #include <periodic_slam/TrackingInfo.h>
+#include <periodic_slam/PhaseFrames.h>
 #include <image_processor.h>
 #include <utils.h>
 
@@ -123,6 +124,10 @@ bool ImageProcessor::loadParameters() {
       processor_config.ransac_threshold, 3);
   nh.param<double>("stereo_threshold",
       processor_config.stereo_threshold, 3);
+  //cout <<processor_config.stereo_threshold << endl; 
+  nh.getParam("param",
+      processor_config.section);
+  cout <<processor_config.section << endl; 
 
   ROS_INFO("===========================================");
   ROS_INFO("cam0_resolution: %d, %d",
@@ -173,31 +178,27 @@ bool ImageProcessor::loadParameters() {
   ROS_INFO("stereo_threshold: %f",
       processor_config.stereo_threshold);
   ROS_INFO("===========================================");
+
+  first_imgs.push_back(true);
+  first_imgs.push_back(true);
+  first_imgs.push_back(true);
+
+
+
   return true;
 }
 
 bool ImageProcessor::createRosIO() {
   feature_pub = nh.advertise<periodic_slam::CameraMeasurement>(
-      "features", 3);
+      "/features", 3);
   tracking_info_pub = nh.advertise<periodic_slam::TrackingInfo>(
-      "tracking_info", 1);
+      "/tracking_info", 1);
   image_transport::ImageTransport it(nh);
   debug_stereo_pub = it.advertise("debug_stereo_image", 1);
 
-  // cam0_img_sub.subscribe(nh, "/left_r200/camera/color/image_raw", 10);
-  // cam1_img_sub.subscribe(nh, "/right_r200/camera/color/image_raw", 10);
-  // stereo_sub.connectInput(cam0_img_sub, cam1_img_sub);
-  // stereo_sub.registerCallback(&ImageProcessor::stereoCallback, this);
-
+  stereoSub = nh.subscribe("/StereoFrames", 10,
+      &ImageProcessor::stereoCallback, this);
   
-
-  cam0_img_sub.subscribe(it,"/DualFactor/down/leftImage", 1);
-  cam1_img_sub.subscribe(it,"/DualFactor/down/rightImage", 1);
-
-  //cam0_img_sub.subscribe(it,"/left_r200/camera/color/image_raw", 1);
-  //cam1_img_sub.subscribe(it,"/right_r200/camera/color/image_raw", 1);
-  sync = new message_filters::Synchronizer<MySyncPolicy> (MySyncPolicy(10), cam0_img_sub, cam1_img_sub);
-  sync -> registerCallback(boost::bind(&ImageProcessor::stereoCallback, this, _1, _2 ));
 
 
   imu_sub = nh.subscribe("imu", 50,
@@ -221,15 +222,36 @@ bool ImageProcessor::initialize() {
 }
 
 void ImageProcessor::stereoCallback(
-    const sensor_msgs::ImageConstPtr& cam0_img,
-    const sensor_msgs::ImageConstPtr& cam1_img) {
-
-  // cout << "==================================" << endl;
+      const periodic_slam::PhaseFrames& framePair){
   
+  int ind = processor_config.section;
+  //cout << ind << endl;
+
+  float lBound;
+  float uBound;
   // Get the current image.
-  cam0_curr_img_ptr = cv_bridge::toCvShare(cam0_img,
+  if (ind ==1){
+    lBound = .62;
+    uBound = 10;
+  } else if (ind == 2){
+    lBound = -.05;
+    uBound = .05;
+  } else if (ind == 3){
+    lBound = -10;
+    uBound = -.62;
+  } 
+  //cout << framePair.pitch << endl;
+
+  if (framePair.pitch < uBound && framePair.pitch > lBound){
+    //cout << ind << endl;
+  } else {
+    return;
+  } 
+
+
+  cam0_curr_img_ptr = cv_bridge::toCvCopy(framePair.imageLeft,
       sensor_msgs::image_encodings::MONO8);
-  cam1_curr_img_ptr = cv_bridge::toCvShare(cam1_img,
+  cam1_curr_img_ptr = cv_bridge::toCvCopy(framePair.imageRight,
       sensor_msgs::image_encodings::MONO8);
 
   // Build the image pyramids once since they're used at multiple places
@@ -1253,6 +1275,7 @@ void ImageProcessor::publish() {
   // Publish features.
   periodic_slam::CameraMeasurementPtr feature_msg_ptr(new periodic_slam::CameraMeasurement);
   feature_msg_ptr->header.stamp = cam0_curr_img_ptr->header.stamp;
+  feature_msg_ptr->section.data = processor_config.section;
 
   vector<FeatureIDType> curr_ids(0);
   vector<Point2f> curr_cam0_points(0);
@@ -1519,8 +1542,14 @@ void ImageProcessor::featureLifetimeStatistics() {
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "stereo_ros");
-    ros::NodeHandle n; 
+    ros::NodeHandle n("~"); 
     gtsam_vio::ImageProcessor node(n);
+
+    std::string param;
+    std::string check;
+    n.getParam("param", check);
+    cout << check << endl;
+
 
     // ros::Duration(3).sleep();
 

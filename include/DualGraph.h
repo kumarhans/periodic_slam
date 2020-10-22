@@ -54,10 +54,8 @@ private:
 
 
     ros::Subscriber poseSUB;
-    image_transport::Publisher leftPubUp;
-    image_transport::Publisher rightPubUp;
-    image_transport::Publisher leftPubDown;
-    image_transport::Publisher rightPubDown;
+    ros::Publisher phaseFramePub;
+
 
     void stereoCallback(const sensor_msgs::ImageConstPtr& cam0_img, const sensor_msgs::ImageConstPtr& cam1_img);
 

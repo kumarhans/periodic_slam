@@ -29,36 +29,61 @@
 
  
 
-    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor">  
-      
+    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor1" args="_param:=1">  
       <rosparam command="load" file="$(arg calibration_file)"/>
-      <param name="grid_row" value="3"/>
+      <param name="grid_row" value="4"/>
       <param name="grid_col" value="4"/>
-      <param name="grid_min_feature_num" value="3"/>
-      <param name="grid_max_feature_num" value="10"/>
+      <param name="grid_min_feature_num" value="2"/>
+      <param name="grid_max_feature_num" value="4"/>
       <param name="pyramid_levels" value="3"/>
       <param name="patch_size" value="15"/>
-      <param name="fast_threshold" value="1"/>
+      <param name="fast_threshold" value="9"/>
       <param name="max_iteration" value="30"/>
       <param name="track_precision" value="0.01"/>
       <param name="ransac_threshold" value="3"/>
-      <param name="stereo_threshold" value="5"/>
-
+      <param name="stereo_threshold" value="3"/>
+      <param name='section' value='1'/>
       <remap from="~imu" to="$(arg imu_topic_id)"/> 
-      <remap from="~cam0_image" to="$(arg camera_left_topic_id)"/>
-      <remap from="~cam1_image" to="$(arg camera_right_topic_id)"/>
   
     </node>
 
-    <!-- Uncompress images if compressed  -->
-    <node name="republish_left" type="republish" pkg="image_transport"
-      args="compressed in:=$(arg camera_left_topic_id) raw out:=$(arg camera_left_topic_id)" 
-      if ="$(eval arg('images_compressed'))"/>
-    <node name="republish_right" type="republish" pkg="image_transport"
-      args="compressed in:=$(arg camera_right_topic_id) raw out:=$(arg camera_right_topic_id)"
-      if ="$(eval arg('images_compressed'))"/>
+
+
+
+    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor2" args="_param:=2">  
+      <rosparam command="load" file="$(arg calibration_file)"/>
+      <param name="grid_row" value="4"/>
+      <param name="grid_col" value="4"/>
+      <param name="grid_min_feature_num" value="2"/>
+      <param name="grid_max_feature_num" value="4"/>
+      <param name="pyramid_levels" value="3"/>
+      <param name="patch_size" value="15"/>
+      <param name="fast_threshold" value="9"/>
+      <param name="max_iteration" value="30"/>
+      <param name="track_precision" value="0.01"/>
+      <param name="ransac_threshold" value="3"/>
+      <param name="stereo_threshold" value="3"/>
+      <param name='section' value='1'/>
+      <remap from="~imu" to="$(arg imu_topic_id)"/> 
+    </node>
+
+    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor3" args="_param:=3">  
+      <rosparam command="load" file="$(arg calibration_file)"/>
+      <param name="grid_row" value="4"/>
+      <param name="grid_col" value="4"/>
+      <param name="grid_min_feature_num" value="2"/>
+      <param name="grid_max_feature_num" value="4"/>
+      <param name="pyramid_levels" value="3"/>
+      <param name="patch_size" value="15"/>
+      <param name="fast_threshold" value="9"/>
+      <param name="max_iteration" value="30"/>
+      <param name="track_precision" value="0.01"/>
+      <param name="ransac_threshold" value="3"/>
+      <param name="stereo_threshold" value="3"/>
+      <param name='section' value='1'/>
+      <remap from="~imu" to="$(arg imu_topic_id)"/> 
+    </node>
     
- 
  
   
  
