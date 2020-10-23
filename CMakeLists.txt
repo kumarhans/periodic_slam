@@ -78,6 +78,9 @@ target_link_libraries(stereoISAM2_IMU ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gt
 add_executable(dualGraph src/DualGraph.cpp src/parameters.cpp)
 target_link_libraries(dualGraph ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
 
+add_executable(stereoISAM2_IMU_VO src/StereoISAM2_IMU_VO.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU_VO ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
  
 
 # Image processor
