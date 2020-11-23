@@ -25,6 +25,12 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <periodic_slam/PhaseFrames.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf/transform_broadcaster.h>
+#include <gtsam/nonlinear/ISAM2.h>
 
 namespace gtsam_vio {
 
@@ -147,6 +153,9 @@ private:
    * @param cam0_img left image.
    * @param cam1_img right image.
    */
+  void poseCallback(
+     const geometry_msgs::PoseStamped& pose);
+
   void stereoCallback(
       const periodic_slam::PhaseFrames& framePair);
 
@@ -191,7 +200,7 @@ private:
    *    Publish the features on the current image including
    *    both the tracked and newly detected ones.
    */
-  void publish();
+  void publish(bool okay);
 
   /*
    * @brief drawFeaturesMono
@@ -238,9 +247,8 @@ private:
    * Note that the input and output points are of pixel coordinates.
    */
   void predictFeatureTracking(
-      const std::vector<cv::Point2f>& input_pts,
-      const cv::Matx33f& R_p_c,
-      const cv::Vec4d& intrinsics,
+      const std::vector<cv::Point2f>& input_pts1,
+      const std::vector<cv::Point2f>& input_pts2,
       std::vector<cv::Point2f>& compenstated_pts);
 
   /*
@@ -350,9 +358,20 @@ private:
   // Take a vector from cam0 frame to the IMU frame.
   cv::Matx33d R_cam0_imu;
   cv::Vec3d t_cam0_imu;
-  // Take a vector from cam1 frame to the IMU frame.
+
   cv::Matx33d R_cam1_imu;
   cv::Vec3d t_cam1_imu;
+  // Take a vector from cam1 frame to the IMU frame.
+  tf::Matrix3x3 R_cam0_world_curr;
+  tf::Vector3 t_cam0_world_curr;
+  tf::Matrix3x3 R_cam0_world_prev;
+  tf::Vector3 t_cam0_world_prev;
+
+  tf::Matrix3x3 tf_cam0_imu;
+
+  tf::Transform transform;
+  tf::Transform transform_prev;
+  tf::Transform transform_curr;
 
   // Previous and current images
   std::vector<cv_bridge::CvImageConstPtr> prev0Ptrs;
@@ -392,6 +411,7 @@ private:
 
   ros::Subscriber imu_sub;
   ros::Subscriber stereoSub;
+  ros::Subscriber pose_sub;
 
   ros::Publisher feature_pub;
   ros::Publisher tracking_info_pub;

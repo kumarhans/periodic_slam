@@ -33,8 +33,20 @@ DualGraph::DualGraph(ros::NodeHandle &nodehandle,image_transport::ImageTransport
 void DualGraph::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
 
-    Leftsub.subscribe(it_,"/left_r200/camera/color/image_raw", 1);
-    Rightsub.subscribe(it_,"/right_r200/camera/color/image_raw", 1);
+    //Leftsub.subscribe(it_,"/left_r200/camera/color/image_raw", 1);
+    //Rightsub.subscribe(it_,"/right_r200/camera/color/image_raw", 1);
+
+    // Leftsub.subscribe(it_,"/camera/infra1/image_rect_raw", 1);
+    // Rightsub.subscribe(it_,"/camera/infra2/image_rect_raw", 1);
+
+    Leftsub.subscribe(it_,"/simulated/camera/left/image_raw", 1);
+    Rightsub.subscribe(it_,"/simulated/camera/right/image_raw", 1);
+
+    //  Leftsub.subscribe(it_,"/simulated/camera/left/blurred/image_raw", 1);
+    //  Rightsub.subscribe(it_,"/simulated/camera/right/blurred/image_raw", 1);
+    
+    // Leftsub.subscribe(it_,"/left_r200/camera/blurred/image_raw", 1);
+    // Rightsub.subscribe(it_,"/right_r200/camera/blurred/image_raw", 1);
 
     sync = new message_filters::Synchronizer<MySyncPolicy> (MySyncPolicy(10), Leftsub, Rightsub);
     sync -> registerCallback(boost::bind(&DualGraph::stereoCallback, this, _1, _2 ));
@@ -54,13 +66,9 @@ void DualGraph::stereoCallback(
         frame.imageLeft = *cam0_img;
         frame.imageRight = *cam1_img;
         frame.pitch = currPitch;
+        frame.header.stamp = frame.imageLeft.header.stamp;
 
         phaseFramePub.publish(frame);
-
-       
-
-
-        //cout << "got imgae" << endl;
 
 }
 

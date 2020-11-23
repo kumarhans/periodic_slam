@@ -25,7 +25,9 @@
     </node>  -->
 
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/Downloads/newCarLargePitch.bag " />  -->
-    <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/difficult.bag " /> 
+    <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/downOnlyVIO.bag " />  -->
+    <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r .5 /home/hans/bags/joeBags/indoor1.bag" /> -->
+    <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hans/bags/joeBags/outdoor4.bag " />  -->
     <!-- <node name ="bag_node" pkg = "rosbag" type = "play" args = "-r 1 /home/hansk/slam_course_ws/slowForward.bag " /> 
      -->
      <node name="Graphs" pkg="periodic_slam" type="dualGraph" respawn="false" output="screen">

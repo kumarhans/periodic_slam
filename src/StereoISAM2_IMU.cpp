@@ -58,6 +58,7 @@ StereoISAM2::StereoISAM2(ros::NodeHandle &nodehandle,image_transport::ImageTrans
     initializeFactorGraph();
 }
 
+
 StereoISAM2::~StereoISAM2 () {
     delete sync;
 }
@@ -79,14 +80,13 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
 };
 
 
-
-
 void StereoISAM2::GTCallback(const geometry_msgs::Twist &msg)
 {
   //gtPoseLast = gtPose.clone();
   //gtPose = Pose3(Rot3::Ypr(msg.angular.z, msg.angular.y, msg.angular.x), Point3(msg.linear.x, msg.linear.y, msg.linear.z));
   return;
 }
+
 
 void StereoISAM2::sendTfs(){
     static tf::TransformBroadcaster br;
@@ -134,10 +134,8 @@ void StereoISAM2::sendTfs(){
     
     myfile.close();
   
-
-
-
 }
+
 
 void StereoISAM2::initializeSubsAndPubs(){
     ROS_INFO("Initializing Subscribers and Publishers");
@@ -164,7 +162,7 @@ void StereoISAM2::initializeFactorGraph(){
     ISAM2 isam(parameters);
     currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
 
-    kGravity = 0.0; //simulation imu does not record gravity 
+    kGravity = 9.81;// 0.0; //simulation imu does not record gravity 
     IMUparams = PreintegrationParams::MakeSharedU(kGravity);
     IMUparams->setAccelerometerCovariance(I_3x3 * 0.1);
     IMUparams->setGyroscopeCovariance(I_3x3 * 0.1);
@@ -194,22 +192,40 @@ void StereoISAM2::initializeFactorGraph(){
 
     accum = PreintegratedImuMeasurements(IMUparams);
 
-
- 
 }
 
  
  
 void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
+    cout << "got mess" << endl;
     geometry_msgs::Vector3 aV = imu_msg.angular_velocity;
     geometry_msgs::Vector3 lA = imu_msg.linear_acceleration;
 
     initialEstimate.insert(X(frame), currPose);
     initialEstimate.insert(V(frame), currVelocity);
-    double dt = .01;
+    double dt = 1/100.0;
     std::default_random_engine generator;
-    std::normal_distribution<double> distribution(0.0,0.1);
+    std::normal_distribution<double> distribution(0.0,0.000000000000001);
     double number = distribution(generator);
+
+    if (currPose.rotation().pitch() > .2){
+      IMUparams = PreintegrationParams::MakeSharedU(kGravity);
+      IMUparams->setAccelerometerCovariance(I_3x3 * 10.1);
+      IMUparams->setGyroscopeCovariance(I_3x3 * 10.1);
+      IMUparams->setIntegrationCovariance(I_3x3 * 10.1);
+      IMUparams->setUse2ndOrderCoriolis(false);
+      IMUparams->setOmegaCoriolis(Vector3(0, 0, 0));
+      accum = PreintegratedImuMeasurements(IMUparams);
+    } else{
+      IMUparams = PreintegrationParams::MakeSharedU(kGravity);
+      IMUparams->setAccelerometerCovariance(I_3x3 * 10.1);
+      IMUparams->setGyroscopeCovariance(I_3x3 * 10.1);
+      IMUparams->setIntegrationCovariance(I_3x3 * 10.1);
+      IMUparams->setUse2ndOrderCoriolis(false);
+      IMUparams->setOmegaCoriolis(Vector3(0, 0, 0));
+      accum = PreintegratedImuMeasurements(IMUparams);
+    }
+
 
     if (frame > 0) {  
       if (frame % 5 == 0) {
@@ -223,37 +239,37 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
         initialEstimate.insert(B(bias), imuBias::ConstantBias());
       }
       // Predict acceleration and gyro measurements in (actual) body frame
-      Vector3 measuredAcc(lA.x,lA.y,lA.z);
+      Vector3 measuredAcc(lA.x+number,lA.y+number,lA.z+number);
       Vector3 measuredOmega(aV.x+number,aV.y+number,aV.z+number);
 
-      if ((signbit(aV.y) != signbit(prevAV)) && frame > 400){
-        if (currPose.rotation().pitch() > .2) {
-          if (loopKeyDown != -1){
-            cout << "loop closure Down" << endl;
-            cout << frame << endl;
-            cout << loopKeyDown << endl;
+      // if ((signbit(aV.y) != signbit(prevAV)) && frame > 400){
+      //   if (currPose.rotation().pitch() > .2) {
+      //     if (loopKeyDown != -1){
+      //       cout << "loop closure Down" << endl;
+      //       cout << frame << endl;
+      //       cout << loopKeyDown << endl;
 
-            Vector6 sigmas;
-            sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
-            auto noise = noiseModel::Diagonal::Sigmas(sigmas);
-            graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyDown), Pose3(), noise);
-          }
-          loopKeyDown = frame;
-        } else if (currPose.rotation().pitch() < -.2){
-          if (loopKeyUp != -1){
-            cout << "loop closure up" << endl;
-            cout << frame << endl;
-            cout << loopKeyUp << endl;
+      //       Vector6 sigmas;
+      //       sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
+      //       auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+      //       graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyDown), Pose3(), noise);
+      //     }
+      //     loopKeyDown = frame;
+      //   } else if (currPose.rotation().pitch() < -.2){
+      //     if (loopKeyUp != -1){
+      //       cout << "loop closure up" << endl;
+      //       cout << frame << endl;
+      //       cout << loopKeyUp << endl;
 
-            Vector6 sigmas;
-            sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
-            auto noise = noiseModel::Diagonal::Sigmas(sigmas);
-            graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyUp), Pose3(), noise);
-          }
-          loopKeyUp = frame;
+      //       Vector6 sigmas;
+      //       sigmas << Vector3::Constant(0.1), Vector3::Constant(10000000000000000000000000000000000000000.0);
+      //       auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+      //       graph.emplace_shared<BetweenFactor<Pose3>>(X(frame), X(loopKeyUp), Pose3(), noise);
+      //     }
+      //     loopKeyUp = frame;
 
-        }
-      }
+      //   }
+      // }
 
       
       prevAV = aV.y;

@@ -5,6 +5,9 @@
  * All rights reserved.
  */
 
+//Store Current Pose
+//Guess next features by doing triangulation, rigid body transformation, projection
+
 #include <iostream>
 #include <algorithm>
 #include <set>
@@ -121,7 +124,7 @@ bool ImageProcessor::loadParameters() {
   nh.param<double>("track_precision",
       processor_config.track_precision, 0.01);
   nh.param<double>("ransac_threshold",
-      processor_config.ransac_threshold, 3);
+      processor_config.ransac_threshold, 10);
   nh.param<double>("stereo_threshold",
       processor_config.stereo_threshold, 3);
   //cout <<processor_config.stereo_threshold << endl; 
@@ -183,6 +186,10 @@ bool ImageProcessor::loadParameters() {
   first_imgs.push_back(true);
   first_imgs.push_back(true);
 
+  tf_cam0_imu = tf::Matrix3x3(0, 0, 1,
+                             -1, 0, 0,
+                              0,-1, 0);
+
 
 
   return true;
@@ -198,12 +205,14 @@ bool ImageProcessor::createRosIO() {
 
   stereoSub = nh.subscribe("/StereoFrames", 10,
       &ImageProcessor::stereoCallback, this);
-  
 
-
-  imu_sub = nh.subscribe("imu", 50,
+  imu_sub = nh.subscribe("/camera_imu", 50,
       &ImageProcessor::imuCallback, this);
-  
+
+  pose_sub = nh.subscribe("/vo/pose",10, 
+      &ImageProcessor::poseCallback,this);
+
+
   return true;
 }
 
@@ -221,6 +230,20 @@ bool ImageProcessor::initialize() {
   return true;
 }
 
+void ImageProcessor::poseCallback(
+      const geometry_msgs::PoseStamped& poseCurr){
+      
+      tf::Quaternion q(poseCurr.pose.orientation.x, poseCurr.pose.orientation.y, poseCurr.pose.orientation.z,poseCurr.pose.orientation.w);
+
+      transform.setOrigin(tf::Vector3(poseCurr.pose.position.x, poseCurr.pose.position.y, poseCurr.pose.position.z));
+     
+      transform.setRotation(q);
+
+      //cout << "poseX: "<< poseCurr.pose.position.x << endl;
+        
+}
+
+
 void ImageProcessor::stereoCallback(
       const periodic_slam::PhaseFrames& framePair){
   
@@ -230,29 +253,38 @@ void ImageProcessor::stereoCallback(
   float lBound;
   float uBound;
   // Get the current image.
-  if (ind ==1){
-    lBound = .62;
+  if (ind == 1){
+    lBound = .75;
     uBound = 10;
   } else if (ind == 2){
     lBound = -.05;
     uBound = .05;
   } else if (ind == 3){
     lBound = -10;
-    uBound = -.62;
-  } 
+    uBound = -.75;
+  }
   //cout << framePair.pitch << endl;
 
-  if (framePair.pitch < uBound && framePair.pitch > lBound){
-    //cout << ind << endl;
-  } else {
-    return;
-  } 
-
+  
 
   cam0_curr_img_ptr = cv_bridge::toCvCopy(framePair.imageLeft,
       sensor_msgs::image_encodings::MONO8);
   cam1_curr_img_ptr = cv_bridge::toCvCopy(framePair.imageRight,
       sensor_msgs::image_encodings::MONO8);
+
+  if (!(framePair.pitch < uBound && framePair.pitch > lBound)){
+    if (ind == 1 && (!(framePair.pitch < -.75 && framePair.pitch > -10)) && (!(framePair.pitch < .05 && framePair.pitch > -.05))){
+       publish(false);
+    }
+    return;
+  } 
+
+
+  transform_prev = transform_curr;
+  transform_curr = transform;
+
+
+  //cout << R_cam0_imu << endl;
 
   // Build the image pyramids once since they're used at multiple places
   createImagePyramids();
@@ -303,7 +335,7 @@ void ImageProcessor::stereoCallback(
 
   // Publish features in the current image.
   ros::Time start_time = ros::Time::now();
-  publish();
+  publish(true);
   //ROS_INFO("Publishing: %f",
   //    (ros::Time::now()-start_time).toSec());
 
@@ -424,30 +456,55 @@ void ImageProcessor::initializeFirstFrame() {
 }
 
 void ImageProcessor::predictFeatureTracking(
-    const vector<cv::Point2f>& input_pts,
-    const cv::Matx33f& R_p_c,
-    const cv::Vec4d& intrinsics,
+    const vector<cv::Point2f>& input_pts1,
+    const vector<cv::Point2f>& input_pts2,
     vector<cv::Point2f>& compensated_pts) {
 
+
   // Return directly if there are no input features.
-  if (input_pts.size() == 0) {
+  if (input_pts1.size() == 0) {
     compensated_pts.clear();
     return;
   }
-  compensated_pts.resize(input_pts.size());
 
-  // Intrinsic matrix.
-  cv::Matx33f K(
-      intrinsics[0], 0.0, intrinsics[2],
-      0.0, intrinsics[1], intrinsics[3],
-      0.0, 0.0, 1.0);
-  cv::Matx33f H = K * R_p_c * K.inv();
+  compensated_pts.resize(input_pts1.size());
 
-  for (int i = 0; i < input_pts.size(); ++i) {
-    cv::Vec3f p1(input_pts[i].x, input_pts[i].y, 1.0f);
-    cv::Vec3f p2 = H * p1;
-    compensated_pts[i].x = p2[0] / p2[2];
-    compensated_pts[i].y = p2[1] / p2[2];
+  tf::Transform newt = transform_curr*transform_prev.inverse();
+  cout << newt.getOrigin()[0] << " " << newt.getOrigin()[1] << " " << newt.getOrigin()[2] << endl;
+  
+
+  for (int i = 0; i < input_pts1.size(); ++i) {
+    double uL = input_pts1[i].x;
+    double uR = input_pts2[i].x;
+    double v = input_pts1[i].y;
+
+    double baseline = .1;
+    double d = uL - uR;
+    double z = cam1_intrinsics[0]*baseline/d;
+    double x = (uL-cam1_intrinsics[2])*z/cam1_intrinsics[0];
+    double y = (v-cam1_intrinsics[3])*z/cam1_intrinsics[1];
+
+    tf::Vector3 camera_point(x, y, z); 
+    tf::Vector3 body_point = tf_cam0_imu*camera_point;
+    
+    tf::Vector3 new_body_point = newt*body_point;
+    
+
+
+    tf::Vector3 new_cam_point = tf_cam0_imu.transpose() * new_body_point;
+
+    
+
+
+    // camera_point = gtsam::Point3(x,y,z); 
+    // gtsam::Point3 body_point = gtsam::bodyToSensor.transformFrom(camera_point);
+    // Point3 world_point = currPose.transformFrom(body_point);
+
+    compensated_pts[i].x = cam1_intrinsics[0]*new_cam_point[0]/new_cam_point[2] + cam1_intrinsics[2];
+    compensated_pts[i].y = cam1_intrinsics[1]*new_cam_point[1]/new_cam_point[2] + cam1_intrinsics[3];
+
+    //cout << input_pts1[i].x << "   " <<  compensated_pts[i].x << endl;
+    
   }
 
   return;
@@ -465,6 +522,7 @@ void ImageProcessor::trackFeatures() {
   Matx33f cam0_R_p_c;
   Matx33f cam1_R_p_c;
   integrateImuData(cam0_R_p_c, cam1_R_p_c);
+
 
   // Organize the features in the previous image.
   vector<FeatureIDType> prev_ids(0);
@@ -488,12 +546,35 @@ void ImageProcessor::trackFeatures() {
   // the previous frame.
   if (prev_ids.size() == 0) return;
 
+
+
   // Track features using LK optical flow method.
   vector<Point2f> curr_cam0_points(0);
   vector<unsigned char> track_inliers(0);
 
-  predictFeatureTracking(prev_cam0_points,
-      cam0_R_p_c, cam0_intrinsics, curr_cam0_points);
+
+  predictFeatureTracking(prev_cam0_points,prev_cam1_points, curr_cam0_points);
+
+   // Create an output image.
+  int img_height = cam0_curr_img_ptr->image.rows;
+  int img_width = cam0_curr_img_ptr->image.cols;
+  Mat out1_img(img_height, img_width, CV_8UC3);
+  cvtColor(cam0_curr_img_ptr->image, out1_img, CV_GRAY2RGB);
+  Scalar tracked(0, 255, 0);
+  Scalar tracked1(255, 0, 0);
+
+  for (int i = 0; i < prev_cam0_points.size(); ++i) {
+    circle(out1_img, curr_cam0_points[i], 3, tracked1, -1);
+    circle(out1_img, prev_cam0_points[i], 3, tracked, -1);
+  }
+
+
+  // imshow("Image",out1_img);
+  // cvWaitKey(10);
+
+  cv_bridge::CvImage debug_image(cam0_prev_img_ptr->header, "bgr8", out1_img);
+    debug_stereo_pub.publish(debug_image.toImageMsg());
+
 
   calcOpticalFlowPyrLK(
       prev_cam0_pyramid_, curr_cam0_pyramid_,
@@ -505,6 +586,17 @@ void ImageProcessor::trackFeatures() {
         processor_config.max_iteration,
         processor_config.track_precision),
       cv::OPTFLOW_USE_INITIAL_FLOW);
+
+  // calcOpticalFlowPyrLK(
+  //     prev_cam0_pyramid_, curr_cam0_pyramid_,
+  //     prev_cam0_points, curr_cam0_points,
+  //     track_inliers, noArray(),
+  //     Size(processor_config.patch_size, processor_config.patch_size),
+  //     processor_config.pyramid_levels,
+  //     TermCriteria(TermCriteria::COUNT+TermCriteria::EPS,
+  //       processor_config.max_iteration,
+  //       processor_config.track_precision));
+
 
   // Mark those tracked points out of the image region
   // as untracked.
@@ -603,8 +695,8 @@ void ImageProcessor::trackFeatures() {
   after_ransac = 0;
 
   for (int i = 0; i < cam0_ransac_inliers.size(); ++i) {
-    if (cam0_ransac_inliers[i] == 0 ||
-        cam1_ransac_inliers[i] == 0) continue;
+    // if (cam0_ransac_inliers[i] == 0 ||
+    //     cam1_ransac_inliers[i] == 0) continue;
     int row = static_cast<int>(
         curr_matched_cam0_points[i].y / grid_height);
     int col = static_cast<int>(
@@ -1140,7 +1232,7 @@ void ImageProcessor::twoPointRansac(
 
   vector<int> best_inlier_set;
   double best_error = 1e10;
-  random_numbers::RandomNumberGenerator random_gen;
+  random_numbers::RandomNumberGenerator random_gen(1);
 
   for (int iter_idx = 0; iter_idx < iter_num; ++iter_idx) {
     // Randomly select two point pairs.
@@ -1270,12 +1362,18 @@ void ImageProcessor::twoPointRansac(
   return;
 }
 
-void ImageProcessor::publish() {
+void ImageProcessor::publish(bool Okay) {
 
   // Publish features.
   periodic_slam::CameraMeasurementPtr feature_msg_ptr(new periodic_slam::CameraMeasurement);
   feature_msg_ptr->header.stamp = cam0_curr_img_ptr->header.stamp;
   feature_msg_ptr->section.data = processor_config.section;
+
+  if (!Okay){
+    feature_msg_ptr->section.data = -1;
+    feature_pub.publish(feature_msg_ptr);
+    return;
+  }
 
   vector<FeatureIDType> curr_ids(0);
   vector<Point2f> curr_cam0_points(0);
@@ -1496,8 +1594,8 @@ void ImageProcessor::drawFeaturesStereo() {
       circle(out_img, pt1, 3, new_feature, -1);
     }
 
-    cv_bridge::CvImage debug_image(cam0_curr_img_ptr->header, "bgr8", out_img);
-    debug_stereo_pub.publish(debug_image.toImageMsg());
+    // cv_bridge::CvImage debug_image(cam0_curr_img_ptr->header, "bgr8", out_img);
+    // debug_stereo_pub.publish(debug_image.toImageMsg());
   }
   //imshow("Feature", out_img);
   //waitKey(5);

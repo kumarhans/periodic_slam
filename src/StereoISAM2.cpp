@@ -153,6 +153,11 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
  
         int radius = 2;
         
+        auto gaussian = noiseModel::Isotropic::Sigma(3, 10.0);
+        auto huber = noiseModel::Robust::Create(
+            noiseModel::mEstimator::Huber::Create(1.345), gaussian);
+
+
 
         noiseModel::Isotropic::shared_ptr prior_landmark_noise = noiseModel::Isotropic::Sigma(3, 0.1);
         noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 10.0); // one pixel in u and v
@@ -189,10 +194,16 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             }
             
             // Add ISAM2 factor connecting this frame's pose to the landmark
+            // graph.emplace_shared<
+            // GenericStereoFactor<Pose3, Point3> >(StereoPoint2(uL, uR, v), 
+            //     pose_landmark_noise, X(frame), L(landmark_id), K,bodyToSensor);
+
             graph.emplace_shared<
             GenericStereoFactor<Pose3, Point3> >(StereoPoint2(uL, uR, v), 
-                pose_landmark_noise, X(frame), L(landmark_id), K,bodyToSensor);
+                 huber, X(frame), L(landmark_id), K,bodyToSensor);
                 
+
+               
             // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
             //Add prior to the landmark as well    
             //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);

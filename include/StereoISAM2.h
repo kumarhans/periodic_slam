@@ -5,12 +5,11 @@
 #include <ros/package.h>
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
-#include <image_transport/subscriber_filter.h>
 #include <cv_bridge/cv_bridge.h>
+
 #include <sensor_msgs/Image.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include "opencv2/features2d/features2d.hpp"
+
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -40,41 +39,59 @@ public:
     ~StereoISAM2();
 
     //Visualization Paramters
-    // bool visualize;    
+    bool visualize;    
     cv::Mat debug_image;
     nav_msgs::Path pathGT;
     nav_msgs::Path pathOPTI;
-    static pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
 
-    //Initialize State of Robot
+    //State of Robot
     gtsam::Pose3 currPose; 
     gtsam::Vector3 currVelocity;
-    gtsam::imuBias::ConstantBias currBias;  // assume zero initial bias
-    static gtsam::Pose3 gtPose;
+    gtsam::imuBias::ConstantBias currBias;  
+    gtsam::Pose3 gtPose = gtsam::Pose3();
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
+    double phase;
+
+    //Counters 
     int landmark;
     int frame;
     int bias;
     double prevAV;
     int loopKeyDown;
     int loopKeyUp;
-    double begin;// =ros::Time::now().toSec();
+    double begin;
+    double graphError;
+    std::vector<int> landmarkOffsets;
     
-
     //Initilize GTSAM Variables
     gtsam::ISAM2 isam;
     gtsam::NonlinearFactorGraph graph;
     gtsam::Values initialEstimate;
     gtsam::Values currentEstimate;
 
+    //Initialize IMU Variables
     boost::shared_ptr<gtsam::PreintegrationParams> IMUparams;
     gtsam::PreintegratedImuMeasurements accum;
     double kGravity;
+    std::deque<double> imu_times;
+    std::deque<gtsam::Vector3> imu_linaccs;
+    std::deque<gtsam::Vector3> imu_angvel;
+    std::deque<gtsam::Vector3> imu_orientation;
 
+    // Set up random noise generators
+    std::default_random_engine generator;
+    std::normal_distribution<double> distributionVO{0.0,0.0};
+    std::normal_distribution<double> distributionIMU{0.0,0.0};
     
+
+
 private:
 
+    // Some Helper Functions
     void initializeSubsAndPubs();
     void initializeFactorGraph();
+    void sendTfs();
+    gtsam::ImuFactor create_imu_factor(double updatetime);
      
     //Ros Subscribers
     ros::NodeHandle nh;
@@ -82,7 +99,6 @@ private:
     ros::Subscriber imuSub;
     ros::Subscriber gazSub;
     ros::Subscriber camSub;
-  
 
     //Ros Publishers
     image_transport::Publisher debug_pub;
@@ -94,12 +110,8 @@ private:
     //Ros Callbacks
     void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);
     void imuCallback(const sensor_msgs::Imu &imu_msg);
-    void sendTfs();
-    static void GTCallback(const geometry_msgs::Twist &msg);
-    static void gazCallback(const gazebo_msgs::LinkStates &msgs);
-
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
-    message_filters::Synchronizer<MySyncPolicy> *sync;
+    void gazCallback(const gazebo_msgs::LinkStates &msgs);
+     
      
 };
 

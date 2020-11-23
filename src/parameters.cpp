@@ -96,6 +96,7 @@ void readParameters(ros::NodeHandle &nh){
  
     bodyToSensor = gtsam::Pose3(roty*rotz);
 
+    
     STEREO_R = (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
     STEREO_R.convertTo(STEREO_R, CV_64F);
     STEREO_T = (cv::Mat_<double>(3, 1) << bf / fx, 0., 0.);

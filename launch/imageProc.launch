@@ -37,20 +37,17 @@
       <param name="grid_max_feature_num" value="4"/>
       <param name="pyramid_levels" value="3"/>
       <param name="patch_size" value="15"/>
-      <param name="fast_threshold" value="10"/>
+      <param name="fast_threshold" value="4"/>
       <param name="max_iteration" value="30"/>
       <param name="track_precision" value="0.01"/>
       <param name="ransac_threshold" value="3"/>
       <param name="stereo_threshold" value="3"/>
       <param name='section' value='1'/>
       <remap from="~imu" to="$(arg imu_topic_id)"/> 
-  
     </node>
 
 
-
-
-    <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor2" args="_param:=2">  
+   <node pkg="periodic_slam" type="image_processorNew"  output="screen" name="image_processor2" args="_param:=2">  
       <rosparam command="load" file="$(arg calibration_file)"/>
       <param name="grid_row" value="4"/>
       <param name="grid_col" value="4"/>
@@ -58,12 +55,12 @@
       <param name="grid_max_feature_num" value="4"/>
       <param name="pyramid_levels" value="3"/>
       <param name="patch_size" value="15"/>
-      <param name="fast_threshold" value="10"/>
+      <param name="fast_threshold" value="15"/>
       <param name="max_iteration" value="30"/>
       <param name="track_precision" value="0.01"/>
       <param name="ransac_threshold" value="3"/>
       <param name="stereo_threshold" value="3"/>
-      <param name='section' value='1'/>
+      <param name='section' value='2'/>
       <remap from="~imu" to="$(arg imu_topic_id)"/> 
     </node>
 
@@ -75,15 +72,15 @@
       <param name="grid_max_feature_num" value="4"/>
       <param name="pyramid_levels" value="3"/>
       <param name="patch_size" value="15"/>
-      <param name="fast_threshold" value="10"/>
+      <param name="fast_threshold" value="4"/>
       <param name="max_iteration" value="30"/>
       <param name="track_precision" value="0.01"/>
       <param name="ransac_threshold" value="3"/>
       <param name="stereo_threshold" value="3"/>
-      <param name='section' value='1'/>
+      <param name='section' value='3'/>
       <remap from="~imu" to="$(arg imu_topic_id)"/> 
     </node>
-    
+  
  
   
  
