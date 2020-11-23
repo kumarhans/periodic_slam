@@ -92,6 +92,7 @@ private:
     void initializeFactorGraph();
     void sendTfs();
     gtsam::ImuFactor create_imu_factor(double updatetime);
+    gtsam::Point3 triangulateFeature(periodic_slam::FeatureMeasurement feature);
      
     //Ros Subscribers
     ros::NodeHandle nh;
