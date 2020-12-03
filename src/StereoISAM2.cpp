@@ -24,13 +24,17 @@
 #include "parameters.h"
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Twist.h>
-#include <geometry_msgs/Twist.h>
+
 
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Imu.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/common/centroid.h>
 #include <periodic_slam/CameraMeasurement.h>
+#include <gtsam/navigation/ImuBias.h>
+#include <gtsam/navigation/ImuFactor.h>
+#include <gazebo_msgs/LinkStates.h>
 
 
 #include <fstream>
@@ -54,27 +58,216 @@ StereoISAM2::StereoISAM2(ros::NodeHandle &nodehandle,image_transport::ImageTrans
     initializeFactorGraph();
 }
 
-StereoISAM2::~StereoISAM2 () {
-    delete sync;
+StereoISAM2::~StereoISAM2 () {}
+
+
+void StereoISAM2::initializeSubsAndPubs(){
+    ROS_INFO("Initializing Subscribers and Publishers");
+
+    debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
+    point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
+    pathOPTI_pub = nh.advertise<nav_msgs::Path>("/vo/pathOPTI", 1);
+    pathGT_pub = nh.advertise<nav_msgs::Path>("/vo/pathGT", 1);
+    pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/vo/pose", 1);
+
+    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback, this);
+    ros::Duration(0.5).sleep();
+    imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
+    camSub = nh.subscribe("features", 1000, &StereoISAM2::camCallback, this);
+
+
+
 }
 
+
+
+void StereoISAM2::initializeFactorGraph(){
+    ROS_INFO("Initializing Factor Graph");
+
+    //SET ISAM2 PARAMS
+    ISAM2Params parameters;
+    parameters.relinearizeThreshold = 0.1;
+    parameters.evaluateNonlinearError = true;
+    ISAM2 isam(parameters);
+
+    //Set IMU PARAMS
+    kGravity = 9.81; //simulation imu does not record gravity 
+    IMUparams = PreintegrationParams::MakeSharedU(kGravity);
+    IMUparams->setAccelerometerCovariance(I_3x3 * 0.5);
+    IMUparams->setGyroscopeCovariance(I_3x3 * 0.1);
+    IMUparams->setIntegrationCovariance(I_3x3 * 0.5);
+    IMUparams->setUse2ndOrderCoriolis(false);
+    IMUparams->setOmegaCoriolis(Vector3(0, 0, 0));
+    accum = PreintegratedImuMeasurements(IMUparams);
+
+    //Start Counters
+    frame = 0;
+    loopKeyDown = -1;
+    loopKeyUp = -1;
+    landmarkOffsets.push_back(-1);
+    landmarkOffsets.push_back(-1);
+    landmarkOffsets.push_back(-1);
+    currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
+    graphError = 0.0;
+    landmark_cloud_msg_ptr = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+
+    // Pose prior 
+    auto priorPoseNoise = noiseModel::Diagonal::Sigmas(
+        (Vector(6) << Vector3::Constant(0.1), Vector3::Constant(0.1)).finished());
+    graph.add(PriorFactor<Pose3>(X(0), currPose, priorPoseNoise));
+    initialEstimate.insert(X(0), currPose);
+
+    //Velocity Prior 
+    auto velnoise = noiseModel::Diagonal::Sigmas(Vector3(0.1, 0.1, 0.1));
+    graph.add(PriorFactor<Vector3>(V(0), currVelocity, velnoise));
+    initialEstimate.insert(V(0), currVelocity);
+
+    //Bias Prior
+    auto biasnoise = noiseModel::Diagonal::Sigmas(Vector6::Constant(0.1));
+    graph.addPrior<imuBias::ConstantBias>(B(0), currBias, biasnoise);
+    initialEstimate.insert(B(0), currBias);
+
+}
+
+
+
+void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
+     
+        vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
+        double timestep = camera_msg->header.stamp.toSec();
+        sendTfs();
+
  
-Pose3 StereoISAM2::gtPose{
-  []{
-    Pose3 a;
-    return a;
-  }() // Call the lambda right away
-};
+        // Set Noise Models for Camera Factors
+        auto gaussian = noiseModel::Isotropic::Sigma(3, 50.0);
+        auto huber = noiseModel::Robust::Create(
+            noiseModel::mEstimator::Huber::Create(1.345), gaussian);
+        noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 30.0); // one pixel in u and v
+        gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr{
-  []{
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptrs(new pcl::PointCloud<pcl::PointXYZRGB>());
-    return landmark_cloud_msg_ptrs;
-  }() // Call the lambda right away
-};
+        
+        
+        // if (camera_msg->section.data == 2 || camera_msg->section.data == 1 ){
+        //     return;
+        // }
+ 
+        cout << camera_msg->section.data << endl;
+
+        if (camera_msg->section.data != -1 && camera_msg->section.data != 2 ){
+            for (int i = 0; i < feature_vector.size(); i++){
+
+
+                periodic_slam::FeatureMeasurement feature = feature_vector[i];
+
+                if (landmarkOffsets[camera_msg->section.data-1] == -1){
+                    landmarkOffsets[camera_msg->section.data-1] = feature.id;
+                }
+                if ( (feature.u0 - feature.u1 ) > 100 || (feature.u0 - feature.u1 ) < 1){
+                    continue;
+                }
+
+                int landmark_id = feature.id + (camera_msg->section.data)*1000;//-landmarkOffsets[camera_msg->section.data-1]+((camera_msg->section.data)*200);
+                cout << landmark_id << endl;
+                Point3 world_point = triangulateFeature(feature);
+
+    
+                if (!currentEstimate.exists(L(landmark_id))) {
+                    pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
+                    if (camera_msg->section.data == 1){
+                        pcl_world_point = pcl::PointXYZRGB(200,0,100);
+                    } else if (camera_msg->section.data == 2){
+                        pcl_world_point = pcl::PointXYZRGB(100,0,200);
+                    }
+
+                    pcl_world_point.x = world_point.x();
+                    pcl_world_point.y = world_point.y();
+                    pcl_world_point.z = world_point.z(); 
+                    landmark_cloud_msg_ptr->points.push_back(pcl_world_point); 
+                    landmarkIDs.push_back(landmark_id);
+                    initialEstimate.insert(L(landmark_id), world_point);
+                }
+                
+                
+                GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
+                huber, X(frame), L(landmark_id), K,bodyToSensor);
+
+                graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
+
+            }
+        } 
+        
+        
+         // Draw new features.
+    // for (const auto& new_cam0_point : curr_cam0_points) {
+    //   cv::Point2f pt0 = new_cam0_point.second;
+    //   cv::Point2f pt1 = curr_cam1_points[new_cam0_point.first] +
+    //     Point2f(img_width, 0.0);
+
+    //   circle(out_img, pt0, 3, new_feature, -1);
+    //   circle(out_img, pt1, 3, new_feature, -1);
+    // }
+
+    // cv_bridge::CvImage debug_image(cam0_curr_img_ptr->header, "bgr8", out_img);
+    // debug_stereo_pub.publish(debug_image.toImageMsg());
 
 
 
+        
+        if (frame > 0){
+          initialEstimate.insert(X(frame), currPose);
+          initialEstimate.insert(V(frame), currVelocity);
+          //initialEstimate.insert(B(0), currBias);
+
+          //Add Imu Factor
+            ImuFactor imufac = create_imu_factor(timestep);
+            graph.add(imufac);
+        }
+
+ 
+        ISAM2Result result = isam.update(graph, initialEstimate);
+  
+ 
+        currentEstimate = isam.calculateEstimate();
+        currPose = currentEstimate.at<Pose3>(X(frame));
+        currVelocity = currentEstimate.at<Vector3>(V(frame));
+        currBias = currentEstimate.at<imuBias::ConstantBias>(B(0));
+        graphError = graph.error(currentEstimate);
+
+
+        graph.resize(0);
+        initialEstimate.clear();
+        accum.resetIntegration();
+        frame ++;
+        
+}
+
+
+
+
+Point3 StereoISAM2::triangulateFeature(periodic_slam::FeatureMeasurement feature){ 
+
+    //cout << feature.u0  << feature.u1 << feature.v0 << endl;
+    double d = feature.u0 - feature.u1;
+
+    //cout << d<< endl;
+    double z = fx*baseline/d;
+    double x = (feature.u0-cx)*z/fx;
+    double y = (feature.v0-cy)*z/fy;
+    Point3 camera_point = Point3(x,y,z); 
+    Point3 body_point = bodyToSensor.transformFrom(camera_point);
+    Point3 world_point = currPose.transformFrom(body_point);
+    return world_point;
+}
+ 
+ 
+
+
+
+
+void StereoISAM2::gazCallback(const gazebo_msgs::LinkStates &msgs){
+    gtPose = Pose3(Rot3::Quaternion(msgs.pose[8].orientation.w, msgs.pose[8].orientation.x, msgs.pose[8].orientation.y,msgs.pose[8].orientation.z), Point3(msgs.pose[8].position.x, msgs.pose[8].position.y, msgs.pose[8].position.z));
+
+}
 
 void StereoISAM2::sendTfs(){
     static tf::TransformBroadcaster br;
@@ -98,7 +291,7 @@ void StereoISAM2::sendTfs(){
     q.setRPY(r.roll(), r.pitch(), r.yaw());
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "True Pose"));
-
+  
     //Send camera tf
     t = bodyToSensor.translation();
     r = bodyToSensor.rotation();
@@ -107,170 +300,70 @@ void StereoISAM2::sendTfs(){
     transform.setRotation(q);
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "True Pose", "Camera"));
 
-}
 
-void StereoISAM2::initializeSubsAndPubs(){
-    ROS_INFO("Initializing Subscribers and Publishers");
- 
-    gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback);
-    camSub = nh.subscribe("features", 1000, &StereoISAM2::camCallback, this);
- 
-    debug_pub = it.advertise("/ros_stereo_odo/debug_image", 1);
-    point_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>>("landmark_point_cloud", 10);
-    pathOPTI_pub = nh.advertise<nav_msgs::Path>("/vo/pathOPTI", 1);
-    pathGT_pub = nh.advertise<nav_msgs::Path>("/vo/pathGT", 1);
-    
-    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr StereoISAM2::landmark_cloud_msg_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    
-}
-
-void StereoISAM2::initializeFactorGraph(){
-    ISAM2Params parameters;
-    parameters.relinearizeThreshold = 0.1;
-    ISAM2 isam(parameters);
-    currPose = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ));
-
-    landmark = 0;
-    frame = 0;
- 
-    // Pose prior - at identity
-    auto priorPoseNoise = noiseModel::Diagonal::Sigmas(
-        (Vector(6) << Vector3::Constant(0.1), Vector3::Constant(0.1)).finished());
-    graph.add(PriorFactor<Pose3>(X(0), currPose, priorPoseNoise));
- 
-}
-
- 
-
-void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg){
-
-        //if (gtPose.rotation().pitch() < 0) return;
-        cout << camera_msg->section.data << endl;
-        if (camera_msg->section.data != 1) return;
-
-        vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
-        initialEstimate.insert(X(frame), currPose);
- 
-        int radius = 2;
-        
-        auto gaussian = noiseModel::Isotropic::Sigma(3, 10.0);
-        auto huber = noiseModel::Robust::Create(
-            noiseModel::mEstimator::Huber::Create(1.345), gaussian);
-
-
-
-        noiseModel::Isotropic::shared_ptr prior_landmark_noise = noiseModel::Isotropic::Sigma(3, 0.1);
-        noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 10.0); // one pixel in u and v
-        gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
-
-        for (int i = 0; i < feature_vector.size(); i++){
-            periodic_slam::FeatureMeasurement feature = feature_vector[i];
-            int landmark_id = feature.id;
-            double uL = feature.u0;
-            double uR = feature.u1;
-            double v = feature.v0;
-
-            //cv::circle(debug, cvPoint(uL, v), radius*3, CV_RGB(255, 0, 0));
-            //addVisualFactor(frame, landmark_id, uL, uR, v);
-
-            double d = uL - uR;
-            double z = fx*baseline/d;
-            double x = (uL-cx)*z/fx;
-            double y = (v-cy)*z/fy;
-            
-            Point3 camera_point = Point3(x,y,z); 
-            Point3 body_point = bodyToSensor.transformFrom(camera_point);
-            Point3 world_point = currPose.transformFrom(body_point) ;
-
-            pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,0,100);
-            pcl_world_point.x = world_point.x();
-            pcl_world_point.y = world_point.y();
-            pcl_world_point.z = world_point.z(); 
-            landmark_cloud_msg_ptr->points.push_back(pcl_world_point);  
-            
-           
-            if (!currentEstimate.exists(L(landmark_id))) {
-                initialEstimate.insert(L(landmark_id), world_point);
-            }
-            
-            // Add ISAM2 factor connecting this frame's pose to the landmark
-            // graph.emplace_shared<
-            // GenericStereoFactor<Pose3, Point3> >(StereoPoint2(uL, uR, v), 
-            //     pose_landmark_noise, X(frame), L(landmark_id), K,bodyToSensor);
-
-            graph.emplace_shared<
-            GenericStereoFactor<Pose3, Point3> >(StereoPoint2(uL, uR, v), 
-                 huber, X(frame), L(landmark_id), K,bodyToSensor);
-                
-
-               
-            // Removing this causes greater accuracy but earlier gtsam::IndeterminantLinearSystemException)
-            //Add prior to the landmark as well    
-            //graph.emplace_shared<PriorFactor<Point3> >(L(landmark_id), world_point, prior_landmark_noise);
-
-            
-
+    // Publish landmark PointCloud message (in world frame)
+    landmark_cloud_msg_ptr->clear();
+    landmark_cloud_msg_ptr->header.frame_id = "world";
+    landmark_cloud_msg_ptr->height = 1;
+    gtsam::Point3 point;
+    for (const int i: landmarkIDs) {
+        point = currentEstimate.at<Point3>(L(i));  
+        pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
+        if (i < 2000){
+            pcl_world_point = pcl::PointXYZRGB(200,0,100);
+        } else if (i > 3000){
+            pcl_world_point = pcl::PointXYZRGB(100,0,200);
         }
 
-        cout << gtPose.rotation().pitch() << endl;
-    
+        pcl_world_point.x = point.x();
+        pcl_world_point.y = point.y();
+        pcl_world_point.z = point.z(); 
+        landmark_cloud_msg_ptr->points.push_back(pcl_world_point);   
+    }
+    landmark_cloud_msg_ptr->width = landmark_cloud_msg_ptr->points.size();
+    point_pub.publish(landmark_cloud_msg_ptr);
+    landmark_cloud_msg_ptr->clear();
 
-        geometry_msgs::PoseStamped poseStamped;
-        poseStamped.header.frame_id="/world";
-        poseStamped.header.stamp = ros::Time::now();
-    
 
-        poseStamped.pose.position.x =  currPose.x();
-        poseStamped.pose.position.y = currPose.y();
-        poseStamped.pose.position.z = currPose.z();
+    //Publish GT Trajectory
+    geometry_msgs::PoseStamped poseStamped;
+    poseStamped.header.frame_id="/world";
+    poseStamped.header.stamp = ros::Time::now();
+    poseStamped.pose.position.x =  gtPose.x();
+    poseStamped.pose.position.y = gtPose.y();
+    poseStamped.pose.position.z = gtPose.z();
+    pathGT.header.frame_id = "world";
+    pathGT.poses.push_back(poseStamped);
+    pathGT.header.stamp = poseStamped.header.stamp;
+    pathGT_pub.publish(pathGT);
+
+
+    //Publish SLAM Trajectory
+    gtsam::Pose3 pose;
+    for (int i = 0; i < frame; i ++){
+        pose = currentEstimate.at<Pose3>(X(i));   
+        poseStamped.pose.position.x =  pose.x();
+        poseStamped.pose.position.y = pose.y();
+        poseStamped.pose.position.z = pose.z();
         pathOPTI.header.frame_id = "world";
         pathOPTI.poses.push_back(poseStamped);
         pathOPTI.header.stamp = poseStamped.header.stamp;
-        pathOPTI_pub.publish(pathOPTI);
-
-        poseStamped.pose.position.x =  gtPose.x();
-        poseStamped.pose.position.y = gtPose.y();
-        poseStamped.pose.position.z = gtPose.z();
-        pathGT.header.frame_id = "world";
-        pathGT.poses.push_back(poseStamped);
-        pathGT.header.stamp = poseStamped.header.stamp;
-        pathGT_pub.publish(pathGT);
-
-
-
-
-        // Publish landmark PointCloud message (in world frame)
-        landmark_cloud_msg_ptr->header.frame_id = "world";
-        landmark_cloud_msg_ptr->height = 1;
-        landmark_cloud_msg_ptr->width = landmark_cloud_msg_ptr->points.size();
-        point_pub.publish(landmark_cloud_msg_ptr);
-        landmark_cloud_msg_ptr->clear();
-        sendTfs();
-
+        pathOPTI_pub.publish(pathOPTI); 
+    }
     
-        
-
-        isam.update(graph, initialEstimate);
-
-        // // ofstream os("test.dot");
-        // // graph.saveGraph(os, initialEstimate);
-
-
-        currentEstimate = isam.calculateEstimate();
-        currPose = currentEstimate.at<Pose3>(X(frame));
-
-        graph.resize(100);
-        initialEstimate.clear();
-        frame ++;
-}
- 
-void StereoISAM2::gazCallback(const gazebo_msgs::LinkStates &msgs){
-    gtPose = Pose3(Rot3::Quaternion(msgs.pose[7].orientation.w, msgs.pose[7].orientation.x, msgs.pose[7].orientation.y,msgs.pose[7].orientation.z), Point3(msgs.pose[7].position.x, msgs.pose[7].position.y, msgs.pose[7].position.z));
-}
+    //Publish Pose
+    r = pose.rotation();
+    q.setRPY(r.roll(), r.pitch(), r.yaw());
+    poseStamped.pose.orientation.x = q.x();
+    poseStamped.pose.orientation.y = q.y();
+    poseStamped.pose.orientation.z = q.z();
+    poseStamped.pose.orientation.w = q.w();
+    pose_pub.publish(poseStamped);
+    pathOPTI.poses.clear();
     
- 
+}
 
- 
+
 
 int main(int argc, char **argv)
 {
@@ -280,17 +373,10 @@ int main(int argc, char **argv)
     ros::Duration(0.5).sleep();
 
     image_transport::ImageTransport it(nh);
-    
-    
     StereoISAM2 node(nh, it);
-    
-    
-
+ 
     ros::Rate loop_rate(100);
     ros::spin();
 
     return 0;
 }
-
- 
- 

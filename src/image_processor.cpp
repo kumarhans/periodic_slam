@@ -5,8 +5,8 @@
  * All rights reserved.
  */
 
-//Store Current Pose
-//Guess next features by doing triangulation, rigid body transformation, projection
+// Store Current Pose
+// Guess next features by doing triangulation, rigid body transformation, projection
 
 #include <iostream>
 #include <algorithm>
@@ -200,9 +200,10 @@ bool ImageProcessor::createRosIO() {
       "/features", 3);
   tracking_info_pub = nh.advertise<periodic_slam::TrackingInfo>(
       "/tracking_info", 1);
+
   image_transport::ImageTransport it(nh);
   debug_stereo_pub = it.advertise("debug_stereo_image", 1);
-
+  
   stereoSub = nh.subscribe("/StereoFrames", 10,
       &ImageProcessor::stereoCallback, this);
 

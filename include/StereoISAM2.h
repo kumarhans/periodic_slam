@@ -62,6 +62,7 @@ public:
     double begin;
     double graphError;
     std::vector<int> landmarkOffsets;
+    std::vector<int> landmarkIDs;
     
     //Initilize GTSAM Variables
     gtsam::ISAM2 isam;
@@ -81,7 +82,7 @@ public:
     // Set up random noise generators
     std::default_random_engine generator;
     std::normal_distribution<double> distributionVO{0.0,0.0};
-    std::normal_distribution<double> distributionIMU{0.0,0.0};
+    std::normal_distribution<double> distributionIMU{0.0,0.5};
     
 
 

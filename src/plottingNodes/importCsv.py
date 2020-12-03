@@ -55,7 +55,7 @@ firstTimeOrb = 0.0
 
 startReading = False
 
-with open('estBlurryNoIMU.csv') as csv_file:
+with open('estDoubleGating.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -94,7 +94,7 @@ with open('estBlurryNoIMU.csv') as csv_file:
 
 startReading = False
 
-with open('vinsBlurry.csv') as csv_file:
+with open('vinsGating.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -110,7 +110,7 @@ with open('vinsBlurry.csv') as csv_file:
 
             # Time
             offset = firstTimeVins-firstTime
-            tvins.append(float(row[0])-offset)
+            tvins.append(float(row[0])+0*offset)
             # Ground truth
             vins_t_x.append(float(row[1]))
             vins_t_y.append(float(row[2]))
@@ -135,7 +135,7 @@ with open('vinsBlurry.csv') as csv_file:
 
 startReading = False
 
-with open('orbBlurry.csv') as csv_file:
+with open('vinsNoGating.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -151,11 +151,11 @@ with open('orbBlurry.csv') as csv_file:
 
             # Time
             offset = firstTimeOrb-firstTime
-            torb.append(float(row[0])-offset)
+            torb.append(float(row[0])+0*offset)
             # Ground truth
             orb_t_x.append(float(row[1]))
             orb_t_y.append(float(row[2]))
-            orb_t_z.append(float(row[3]))
+            orb_t_z.append(float(row[3])-.7)
             orb_o_x.append(float(row[4]))
             orb_o_y.append(float(row[5]))
             orb_o_z.append(float(row[6]))
@@ -343,14 +343,14 @@ fig2 = plt.figure()
 ax2 = fig2.add_subplot(111)
 ax2.plot(gt_t_x, gt_t_y, 'r-', label='Ground Truth', alpha=.5,linewidth=2.0)
 ax2.plot(est_t_x, est_t_y, 'b-', label='periodic SLAM', alpha=0.5, linewidth=2.0)
-ax2.plot(vins_t_x, vins_t_y, 'g-', label='VINS-Fusion', alpha=0.5, linewidth=2.0)
-ax2.plot(orb_t_x, orb_t_y, 'y-', label='ORB-SLAM2', alpha=0.5, linewidth=2.0)
+ax2.plot(vins_t_x, vins_t_y, 'g-', label='VINS-Fusion Only Down Frames', alpha=0.5, linewidth=2.0)
+ax2.plot(orb_t_x, orb_t_y, 'y-', label='VINS-Fusion', alpha=0.5, linewidth=2.0)
 #ax2.plot(vins_t_x, vins_t_y, 'g-', label='VINS-Fusion', alpha=0.5, linewidth=2.0)
 ax2.legend(loc='best')
 ax2.set_xlabel('X (m)')
 ax2.set_ylabel('Y (m)')
 #ax2.set_xlim([-2.0,.5])
-#ax2.set_ylim([-1.5,1.5])
+ax2.set_ylim([-2,2])
 ax2.axis('equal')
 plt.grid(True)
 plt.title("XY Trajectories")
@@ -540,13 +540,13 @@ fig8 = plt.figure()
 ax8 = fig8.add_subplot(111)
 ax8.plot(t, gt_t_x, 'r-', label='Ground Truth', alpha=0.5,linewidth=2.0)
 ax8.plot(t, est_t_x, 'b-', label='periodic SLAM', alpha=0.5,linewidth=2.0)
-ax8.plot(tvins, vins_t_x, 'g-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
-ax8.plot(torb, orb_t_x, 'y-', label='ORB-SLAM2', alpha=0.5,linewidth=2.0)
+ax8.plot(tvins, vins_t_x, 'g-', label='VINS-Fusion Only Down Frames', alpha=0.5,linewidth=2.0)
+ax8.plot(torb, orb_t_x, 'y-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
 
 ax8.legend(loc='best')
 ax8.set_xlabel('Time (s)')
 ax8.set_ylabel('X Position (m)')
-ax8.set_ylim([-6,6])
+ax8.set_ylim([0,11])
 plt.grid(True)
 plt.title("X Axis Position vs Time")
 # plt.show()
@@ -559,13 +559,13 @@ fig9 = plt.figure()
 ax9 = fig9.add_subplot(111)
 ax9.plot(t, gt_t_y, 'r-', label='Ground Truth', alpha=0.5,linewidth=2.0)
 ax9.plot(t, est_t_y, 'b-', label='periodic SLAM', alpha=0.5,linewidth=2.0)
-ax9.plot(tvins, vins_t_y, 'g-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
-ax9.plot(torb, orb_t_y, 'y-', label='ORB-SLAM2', alpha=0.5,linewidth=2.0)
+ax9.plot(tvins, vins_t_y, 'g-', label='VINS-Fusion Only Down Frames', alpha=0.5,linewidth=2.0)
+ax9.plot(torb, orb_t_y, 'y-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
 
 ax9.legend(loc='best')
 ax9.set_xlabel('Time (s)')
 ax9.set_ylabel('Y Position (m)')
-ax9.set_ylim([-2,2])
+ax9.set_ylim([-1.5,1.5])
 plt.grid(True)
 
 plt.title("Y Axis Position vs Time")
@@ -577,13 +577,13 @@ fig95 = plt.figure()
 ax95 = fig95.add_subplot(111)
 ax95.plot(t, gt_t_z, 'r-', label='Ground Truth', alpha=0.5,linewidth=2.0)
 ax95.plot(t, est_t_z, 'b-', label='periodic SLAM', alpha=0.5,linewidth=2.0)
-ax95.plot(tvins, vins_t_z, 'g-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
-ax95.plot(torb, orb_t_z, 'y-', label='ORB-SLAM2', alpha=0.5,linewidth=2.0)
+ax95.plot(tvins, vins_t_z, 'g-', label='VINS-Fusion Only Down Frames', alpha=0.5,linewidth=2.0)
+ax95.plot(torb, orb_t_z, 'y-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
 
 ax95.legend(loc='best')
 ax95.set_xlabel('Time (s)')
 ax95.set_ylabel('Z Position (m)')
-ax95.set_ylim([-2,4])
+ax95.set_ylim([1,2.5])
 plt.grid(True)
 plt.title("Z Axis Position vs Time")
 #plt.show()

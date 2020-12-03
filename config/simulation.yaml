@@ -28,9 +28,9 @@ baseline: .1
 # initRoll: 0.0
 # initPitch: 0.5
 # initYaw: 0.0
-initX: 0.1
+initX: 0.0
 initY: 0.0
-initZ: 1.3
+initZ: 1.25
 initRoll: 0.0
 initPitch: 0.0 #0.75 #0.62 #0.0
 initYaw: 0.0

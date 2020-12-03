@@ -68,20 +68,6 @@ link_directories(
 )
 
  
- 
-#add_executable(stereoISAM2 src/StereoISAM2.cpp src/parameters.cpp)
-#target_link_libraries(stereoISAM2 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
-
-#add_executable(stereoISAM2_IMU src/StereoISAM2_IMU.cpp src/parameters.cpp)
-#target_link_libraries(stereoISAM2_IMU ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
-
-#add_executable(dualGraph src/DualGraph.cpp src/parameters.cpp)
-#target_link_libraries(dualGraph ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
-
-add_executable(stereoISAM2_IMU_VO src/StereoISAM2_IMU_VO.cpp src/parameters.cpp)
-target_link_libraries(stereoISAM2_IMU_VO ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
-
- 
 
 # Image processor
 add_library(image_processorUtils
@@ -98,11 +84,35 @@ target_link_libraries(image_processorUtils
 )
 
 
+#add_library(feat
+#  src/feature_tracker.cpp
+#)
+
  
 add_executable(image_processorNew src/image_processor.cpp)
 target_link_libraries(image_processorNew image_processorUtils  ${catkin_LIBRARIES} gtsam)
 add_dependencies(image_processorNew ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
  
+ 
+#add_executable(stereoISAM2 src/StereoISAM2.cpp src/parameters.cpp)
+#target_link_libraries(stereoISAM2 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+add_executable(stereoISAM2_IMU src/StereoISAM2_IMU.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+#add_executable(dualGraph src/DualGraph.cpp src/parameters.cpp)
+#target_link_libraries(dualGraph ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+add_executable(stereoISAM2_IMU_VO src/StereoISAM2_IMU_VO.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU_VO ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+add_executable(SplittingFrames src/SplittingFrames.cpp src/parameters.cpp)
+target_link_libraries(SplittingFrames ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+
+#add_executable(feature_node src/feature_node.cpp src/parameters.cpp)
+#target_link_libraries(feature_node feat ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
  
 
  

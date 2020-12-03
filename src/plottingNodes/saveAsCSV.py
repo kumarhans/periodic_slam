@@ -78,7 +78,7 @@ if __name__ == '__main__':
             start = time.time()
 
         gt.append(global_gt_pos)
-        # est.append(get6DOF('body','world'))
+        #est.append(get6DOF('body','world'))
         est.append(get6DOF('Optimized Pose','world'))
         # est.append(get6DOF('camera_link','map'))
         t.append([time.time()- start])
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     a = np.concatenate((np.array(t),np.array(est), np.array(gt)),axis=1)
 
     print(np.shape(a))
-    np.savetxt("estBlurryNoIMU.csv", a, delimiter=",")
+    np.savetxt("estDoubleGating.csv", a, delimiter=",")
 
 
     
