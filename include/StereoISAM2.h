@@ -40,6 +40,7 @@ public:
 
     //Visualization Paramters
     bool visualize;    
+    bool initialized;
     cv::Mat debug_image;
     nav_msgs::Path pathGT;
     nav_msgs::Path pathOPTI;
@@ -59,6 +60,12 @@ public:
     double prevAV;
     int loopKeyDown;
     int loopKeyUp;
+
+    int lastUp;
+    int lastDown;
+    gtsam::Pose3 startUp;
+    gtsam::Pose3 startDown;
+
     double begin;
     double graphError;
     std::vector<int> landmarkOffsets;

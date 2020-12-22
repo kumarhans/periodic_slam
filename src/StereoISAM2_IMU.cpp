@@ -178,20 +178,6 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
 
 
 
-Point3 StereoISAM2::triangulateFeature(periodic_slam::FeatureMeasurement feature){ 
-
-    //cout << feature.u0  << feature.u1 << feature.v0 << endl;
-    double d = feature.u0 - feature.u1;
-
-    //cout << d<< endl;
-    double z = fx*baseline/d;
-    double x = (feature.u0-cx)*z/fx;
-    double y = (feature.v0-cy)*z/fy;
-    Point3 camera_point = Point3(x,y,z); 
-    Point3 body_point = bodyToSensor.transformFrom(camera_point);
-    Point3 world_point = currPose.transformFrom(body_point);
-    return world_point;
-}
  
  
 void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){

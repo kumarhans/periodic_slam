@@ -55,7 +55,7 @@ firstTimeOrb = 0.0
 
 startReading = False
 
-with open('estDoubleGating.csv') as csv_file:
+with open('periodicIMU_VO.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -94,7 +94,7 @@ with open('estDoubleGating.csv') as csv_file:
 
 startReading = False
 
-with open('vinsGating.csv') as csv_file:
+with open('vinsSplit.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -135,7 +135,7 @@ with open('vinsGating.csv') as csv_file:
 
 startReading = False
 
-with open('vinsNoGating.csv') as csv_file:
+with open('vinsSplitNot.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     line_count = 0
     for row in csv_reader:
@@ -583,7 +583,7 @@ ax95.plot(torb, orb_t_z, 'y-', label='VINS-Fusion', alpha=0.5,linewidth=2.0)
 ax95.legend(loc='best')
 ax95.set_xlabel('Time (s)')
 ax95.set_ylabel('Z Position (m)')
-ax95.set_ylim([1,2.5])
+ax95.set_ylim([0,2.5])
 plt.grid(True)
 plt.title("Z Axis Position vs Time")
 #plt.show()

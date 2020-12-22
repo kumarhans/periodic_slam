@@ -94,8 +94,8 @@ target_link_libraries(image_processorNew image_processorUtils  ${catkin_LIBRARIE
 add_dependencies(image_processorNew ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
  
  
-#add_executable(stereoISAM2 src/StereoISAM2.cpp src/parameters.cpp)
-#target_link_libraries(stereoISAM2 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+add_executable(stereoISAM2 src/StereoISAM2.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
 
 add_executable(stereoISAM2_IMU src/StereoISAM2_IMU.cpp src/parameters.cpp)
 target_link_libraries(stereoISAM2_IMU ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)

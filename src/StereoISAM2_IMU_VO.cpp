@@ -147,15 +147,15 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
 
         
         
-        // if (camera_msg->section.data == 2 || camera_msg->section.data == 1 ){
-        //     return;
-        // }
+        if (camera_msg->section.data > 3){
+            return;
+        }
 
         // cv::Mat out_img = 
         cout << camera_msg->section.data << endl;
 
-        if (camera_msg->section.data == 4 && camera_msg->section.data != -1 && camera_msg->section.data != 2 ){
-            cout << feature_vector.size() << "deeeded" << endl;
+        if (camera_msg->section.data != -1 &&  camera_msg->section.data != 2 || (camera_msg->section.data == 2 && landmarkOffsets[0] == -1)){
+        //if (camera_msg->section.data != -1){
             for (int i = 0; i < feature_vector.size(); i++){
 
 
@@ -164,9 +164,9 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                 if (landmarkOffsets[camera_msg->section.data-1] == -1){
                     landmarkOffsets[camera_msg->section.data-1] = feature.id;
                 }
-                // if ( (feature.u0 - feature.u1 ) > 100 || (feature.u0 - feature.u1 ) < 1){
-                //     continue;
-                // }
+                if ( (feature.u0 - feature.u1 ) > 20 || (feature.u0 - feature.u1 ) < 1){
+                    continue;
+                }
 
                 int landmark_id = feature.id + (camera_msg->section.data)*1000;//-landmarkOffsets[camera_msg->section.data-1]+((camera_msg->section.data)*200);
                 cout << landmark_id << endl;
@@ -186,17 +186,16 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                     pcl_world_point.z = world_point.z(); 
                     landmark_cloud_msg_ptr->points.push_back(pcl_world_point); 
                     landmarkIDs.push_back(landmark_id);
-                    //initialEstimate.insert(L(landmark_id), world_point);
+                    initialEstimate.insert(L(landmark_id), world_point);
                 }
                 
                 
                 GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
                 huber, X(frame), L(landmark_id), K,bodyToSensor);
-                
-                //graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
+
+                graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
 
             }
-            return;
         } 
         
         
@@ -216,7 +215,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
 
 
         
-        if (frame > 0 ){
+        if (frame > 0){
           initialEstimate.insert(X(frame), currPose);
           initialEstimate.insert(V(frame), currVelocity);
           //initialEstimate.insert(B(0), currBias);
@@ -308,7 +307,7 @@ ImuFactor StereoISAM2::create_imu_factor(double updatetime) {
 
 
 void StereoISAM2::gazCallback(const gazebo_msgs::LinkStates &msgs){
-    gtPose = Pose3(Rot3::Quaternion(msgs.pose[8].orientation.w, msgs.pose[8].orientation.x, msgs.pose[8].orientation.y,msgs.pose[8].orientation.z), Point3(msgs.pose[8].position.x, msgs.pose[8].position.y, msgs.pose[8].position.z));
+    gtPose = Pose3(Rot3::Quaternion(msgs.pose[11].orientation.w, msgs.pose[11].orientation.x, msgs.pose[11].orientation.y,msgs.pose[11].orientation.z), Point3(msgs.pose[11].position.x, msgs.pose[11].position.y, msgs.pose[11].position.z));
 
 }
 
@@ -345,27 +344,27 @@ void StereoISAM2::sendTfs(){
 
 
     // Publish landmark PointCloud message (in world frame)
-    //landmark_cloud_msg_ptr->clear();
+    landmark_cloud_msg_ptr->clear();
     landmark_cloud_msg_ptr->header.frame_id = "world";
     landmark_cloud_msg_ptr->height = 1;
     gtsam::Point3 point;
-    // for (const int i: landmarkIDs) {
-    //     point = currentEstimate.at<Point3>(L(i));  
-    //     pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
-    //     if (i < 2000){
-    //         pcl_world_point = pcl::PointXYZRGB(200,0,100);
-    //     } else if (i > 3000){
-    //         pcl_world_point = pcl::PointXYZRGB(100,0,200);
-    //     }
+    for (const int i: landmarkIDs) {
+        point = currentEstimate.at<Point3>(L(i));  
+        pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
+        if (i < 2000){
+            pcl_world_point = pcl::PointXYZRGB(200,0,100);
+        } else if (i > 3000){
+            pcl_world_point = pcl::PointXYZRGB(100,0,200);
+        }
 
-    //     pcl_world_point.x = point.x();
-    //     pcl_world_point.y = point.y();
-    //     pcl_world_point.z = point.z(); 
-    //     landmark_cloud_msg_ptr->points.push_back(pcl_world_point);   
-    // }
+        pcl_world_point.x = point.x();
+        pcl_world_point.y = point.y();
+        pcl_world_point.z = point.z(); 
+        landmark_cloud_msg_ptr->points.push_back(pcl_world_point);   
+    }
     landmark_cloud_msg_ptr->width = landmark_cloud_msg_ptr->points.size();
     point_pub.publish(landmark_cloud_msg_ptr);
-    //landmark_cloud_msg_ptr->clear();
+    landmark_cloud_msg_ptr->clear();
 
 
     //Publish GT Trajectory

@@ -15,7 +15,7 @@ import csv
 from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import LinkStates
-
+from std_msgs.msg import Int32
 
 
 
@@ -42,11 +42,19 @@ def checkDistance():
     
 
 global_gt_pos = [0,0,0,0,0,0,0]
+track_num = 100
 
 
 def gaz_callback(msgs):
     global global_gt_pos
-    global_gt_pos = [msgs.pose[7].position.x, msgs.pose[7].position.y, msgs.pose[7].position.z, msgs.pose[7].orientation.w, msgs.pose[7].orientation.x, msgs.pose[7].orientation.y,msgs.pose[7].orientation.z]
+    global_gt_pos = [msgs.pose[11].position.x, msgs.pose[11].position.y, msgs.pose[11].position.z, msgs.pose[11].orientation.w, msgs.pose[11].orientation.x, msgs.pose[11].orientation.y,msgs.pose[11].orientation.z]
+
+
+def track_callback(msgs):
+    global track_num
+    track_num = msgs.data
+    print(track_num)
+
 
 
 if __name__ == '__main__':
@@ -55,15 +63,18 @@ if __name__ == '__main__':
 
 
     rospy.Subscriber("/gazebo/link_states",LinkStates, gaz_callback)
+    rospy.Subscriber("/vins_estimator/track_count",Int32, track_callback)
 
  
 
     gt = []
     est = []
     t = []
+    track_nums = []
 
 
     global global_gt_pos
+    global track_num
  
 
     start = 0
@@ -79,7 +90,9 @@ if __name__ == '__main__':
 
         gt.append(global_gt_pos)
         #est.append(get6DOF('body','world'))
-        est.append(get6DOF('Optimized Pose','world'))
+        est.append(get6DOF('bodyIMU','world'))
+        track_nums.append([track_num])
+        #est.append(get6DOF('Optimized Pose','world'))
         # est.append(get6DOF('camera_link','map'))
         t.append([time.time()- start])
         print(global_gt_pos)
@@ -94,12 +107,15 @@ if __name__ == '__main__':
     print(np.shape(np.array(t)))
     print(np.shape(np.array(est)))
     print(np.shape(np.array(gt)))
+    print(np.shape(track_nums))
+
+    print(track_nums)
 
 
-    a = np.concatenate((np.array(t),np.array(est), np.array(gt)),axis=1)
+    a = np.concatenate((np.array(t),np.array(est), np.array(gt),np.array(track_nums)),axis=1)
 
     print(np.shape(a))
-    np.savetxt("estDoubleGating.csv", a, delimiter=",")
+    np.savetxt("vinsGait25fh.csv", a, delimiter=",")
 
 
     

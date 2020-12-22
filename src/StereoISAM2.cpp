@@ -72,9 +72,7 @@ void StereoISAM2::initializeSubsAndPubs(){
 
     gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback, this);
     ros::Duration(0.5).sleep();
-    imuSub = nh.subscribe("/camera_imu", 1000, &StereoISAM2::imuCallback, this);
     camSub = nh.subscribe("features", 1000, &StereoISAM2::camCallback, this);
-
 
 
 }
@@ -90,20 +88,10 @@ void StereoISAM2::initializeFactorGraph(){
     parameters.evaluateNonlinearError = true;
     ISAM2 isam(parameters);
 
-    //Set IMU PARAMS
-    kGravity = 9.81; //simulation imu does not record gravity 
-    IMUparams = PreintegrationParams::MakeSharedU(kGravity);
-    IMUparams->setAccelerometerCovariance(I_3x3 * 0.5);
-    IMUparams->setGyroscopeCovariance(I_3x3 * 0.1);
-    IMUparams->setIntegrationCovariance(I_3x3 * 0.5);
-    IMUparams->setUse2ndOrderCoriolis(false);
-    IMUparams->setOmegaCoriolis(Vector3(0, 0, 0));
-    accum = PreintegratedImuMeasurements(IMUparams);
 
     //Start Counters
     frame = 0;
-    loopKeyDown = -1;
-    loopKeyUp = -1;
+    initialized = false;
     landmarkOffsets.push_back(-1);
     landmarkOffsets.push_back(-1);
     landmarkOffsets.push_back(-1);
@@ -117,15 +105,21 @@ void StereoISAM2::initializeFactorGraph(){
     graph.add(PriorFactor<Pose3>(X(0), currPose, priorPoseNoise));
     initialEstimate.insert(X(0), currPose);
 
-    //Velocity Prior 
-    auto velnoise = noiseModel::Diagonal::Sigmas(Vector3(0.1, 0.1, 0.1));
-    graph.add(PriorFactor<Vector3>(V(0), currVelocity, velnoise));
-    initialEstimate.insert(V(0), currVelocity);
+   
+    frame += 1;
+    
+    lastDown = -1;
+    lastUp = -1;
+    
 
-    //Bias Prior
-    auto biasnoise = noiseModel::Diagonal::Sigmas(Vector6::Constant(0.1));
-    graph.addPrior<imuBias::ConstantBias>(B(0), currBias, biasnoise);
-    initialEstimate.insert(B(0), currBias);
+    ISAM2Result result = isam.update(graph, initialEstimate);
+    currentEstimate = isam.calculateEstimate();
+    // //graph.resize(0);
+    initialEstimate = currentEstimate;
+    
+    // currPose = currentEstimate.at<Pose3>(X(lastDown));
+    cout << "atttttt" << frame << endl;
+ 
 
 }
 
@@ -136,7 +130,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         double timestep = camera_msg->header.stamp.toSec();
         sendTfs();
-
+        
  
         // Set Noise Models for Camera Factors
         auto gaussian = noiseModel::Isotropic::Sigma(3, 50.0);
@@ -144,101 +138,113 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             noiseModel::mEstimator::Huber::Create(1.345), gaussian);
         noiseModel::Isotropic::shared_ptr pose_landmark_noise = noiseModel::Isotropic::Sigma(3, 30.0); // one pixel in u and v
         gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
+        
+        
+        
+        if (camera_msg->section.data == -1 || camera_msg->section.data == 2 || camera_msg->section.data >= 4 ){
+            return;
+        }
+
+
+        if (feature_vector.size() < 3){
+            return;
+        }
+
+        Vector6 sigmas;
+        sigmas << Vector3::Constant(0.1), Vector3::Constant(.1);
+        auto Odomnoise = noiseModel::Diagonal::Sigmas(sigmas);
+        Pose3 odomUp = Pose3(Rot3::Ypr(0,-.81,0), Point3(.2,0,0));
+        Pose3 odomDown = Pose3(Rot3::Ypr(0,.67,0), Point3(.1,0,0));
+        
 
         
         
-        // if (camera_msg->section.data == 2 || camera_msg->section.data == 1 ){
-        //     return;
-        // }
+
+
+        if (camera_msg->section.data == 1){
+            if (lastDown == -1){
+                startDown = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ)).compose(odomDown);
+                initialEstimate.insert(X(1), startDown);
+                graph.emplace_shared<BetweenFactor<Pose3>>(X(0), X(1), odomDown, Odomnoise);
+                currPose = startDown;
+                lastDown = frame;
+            } else {
+                currPose = currentEstimate.at<Pose3>(X(lastDown));
+                lastDown = frame;
+            }
+        } else{
+            if (lastUp == -1){
+                startUp = Pose3(Rot3::Ypr(initYaw,initPitch,initRoll), Point3(initX,initY,initZ)).compose(odomUp);
+                graph.emplace_shared<BetweenFactor<Pose3>>(X(0), X(2), odomUp, Odomnoise);
+                initialEstimate.insert(X(2), startUp);
+                currPose = startUp;
+                lastUp = frame;
+            } else {
+                currPose = currentEstimate.at<Pose3>(X(lastUp));
+                lastUp = frame;
+            }
+            
+        }
  
         cout << camera_msg->section.data << endl;
 
-        if (camera_msg->section.data != -1 && camera_msg->section.data != 2 ){
-            for (int i = 0; i < feature_vector.size(); i++){
+        
+        for (int i = 0; i < feature_vector.size(); i++){
 
 
-                periodic_slam::FeatureMeasurement feature = feature_vector[i];
 
-                if (landmarkOffsets[camera_msg->section.data-1] == -1){
-                    landmarkOffsets[camera_msg->section.data-1] = feature.id;
-                }
-                if ( (feature.u0 - feature.u1 ) > 100 || (feature.u0 - feature.u1 ) < 1){
-                    continue;
-                }
+            periodic_slam::FeatureMeasurement feature = feature_vector[i];
 
-                int landmark_id = feature.id + (camera_msg->section.data)*1000;//-landmarkOffsets[camera_msg->section.data-1]+((camera_msg->section.data)*200);
-                cout << landmark_id << endl;
-                Point3 world_point = triangulateFeature(feature);
+       
 
-    
-                if (!currentEstimate.exists(L(landmark_id))) {
-                    pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
-                    if (camera_msg->section.data == 1){
-                        pcl_world_point = pcl::PointXYZRGB(200,0,100);
-                    } else if (camera_msg->section.data == 2){
-                        pcl_world_point = pcl::PointXYZRGB(100,0,200);
-                    }
-
-                    pcl_world_point.x = world_point.x();
-                    pcl_world_point.y = world_point.y();
-                    pcl_world_point.z = world_point.z(); 
-                    landmark_cloud_msg_ptr->points.push_back(pcl_world_point); 
-                    landmarkIDs.push_back(landmark_id);
-                    initialEstimate.insert(L(landmark_id), world_point);
-                }
-                
-                
-                GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
-                huber, X(frame), L(landmark_id), K,bodyToSensor);
-
-                graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
-
+            if ( (feature.u0 - feature.u1 ) > 100 || (feature.u0 - feature.u1 ) < 1){
+                continue;
             }
-        } 
-        
-        
-         // Draw new features.
-    // for (const auto& new_cam0_point : curr_cam0_points) {
-    //   cv::Point2f pt0 = new_cam0_point.second;
-    //   cv::Point2f pt1 = curr_cam1_points[new_cam0_point.first] +
-    //     Point2f(img_width, 0.0);
 
-    //   circle(out_img, pt0, 3, new_feature, -1);
-    //   circle(out_img, pt1, 3, new_feature, -1);
-    // }
-
-    // cv_bridge::CvImage debug_image(cam0_curr_img_ptr->header, "bgr8", out_img);
-    // debug_stereo_pub.publish(debug_image.toImageMsg());
+            int landmark_id = feature.id + (camera_msg->section.data)*1000; 
+            Point3 world_point = triangulateFeature(feature);
 
 
+            if (!currentEstimate.exists(L(landmark_id))) {
+                pcl::PointXYZRGB pcl_world_point = pcl::PointXYZRGB(200,100,0);
+                if (camera_msg->section.data == 1){
+                    pcl_world_point = pcl::PointXYZRGB(200,0,100);
+                } else if (camera_msg->section.data == 2){
+                    pcl_world_point = pcl::PointXYZRGB(100,0,200);
+                }
 
-        
-        if (frame > 0){
-          initialEstimate.insert(X(frame), currPose);
-          initialEstimate.insert(V(frame), currVelocity);
-          //initialEstimate.insert(B(0), currBias);
+                pcl_world_point.x = world_point.x();
+                pcl_world_point.y = world_point.y();
+                pcl_world_point.z = world_point.z(); 
+                landmark_cloud_msg_ptr->points.push_back(pcl_world_point); 
+                landmarkIDs.push_back(landmark_id);
+                initialEstimate.insert(L(landmark_id), world_point);
+            }
 
-          //Add Imu Factor
-            ImuFactor imufac = create_imu_factor(timestep);
-            graph.add(imufac);
+            GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
+            huber, X(frame), L(landmark_id), K,bodyToSensor);
+            cout << "frame " << frame << "land ID " << landmark_id << endl;
+            graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
+
         }
 
- 
+        if (frame > 2){
+            initialEstimate.insert(X(frame), currPose);
+        } 
+
+        cout << "here" << endl;
         ISAM2Result result = isam.update(graph, initialEstimate);
-  
- 
         currentEstimate = isam.calculateEstimate();
-        currPose = currentEstimate.at<Pose3>(X(frame));
-        currVelocity = currentEstimate.at<Vector3>(V(frame));
-        currBias = currentEstimate.at<imuBias::ConstantBias>(B(0));
-        graphError = graph.error(currentEstimate);
-
-
+        
+        //currPose = currentEstimate.at<Pose3>(X(frame));
+        cout << "here" << endl;
         graph.resize(0);
         initialEstimate.clear();
-        accum.resetIntegration();
-        frame ++;
         
+        
+        frame ++;
+
+
 }
 
 
