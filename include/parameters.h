@@ -31,6 +31,8 @@ extern double initRoll;
 extern double initPitch;
 extern double initYaw;
 
+extern std::vector<int> estimators;
+
 extern cv::Mat projMatrl;
 extern cv::Mat projMatrr;
 extern cv::Mat cameraMatrix;

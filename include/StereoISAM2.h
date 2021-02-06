@@ -27,6 +27,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/navigation/ImuFactor.h>
 #include <gazebo_msgs/LinkStates.h>
+#include <gtsam_unstable/nonlinear/IncrementalFixedLagSmoother.h>
 
  
 
@@ -60,6 +61,7 @@ public:
     double prevAV;
     int loopKeyDown;
     int loopKeyUp;
+    bool estimatorInit;
 
     int lastUp;
     int lastDown;
@@ -72,7 +74,8 @@ public:
     std::vector<int> landmarkIDs;
     
     //Initilize GTSAM Variables
-    gtsam::ISAM2 isam;
+    gtsam::IncrementalFixedLagSmoother smootherISAM2;
+    gtsam::FixedLagSmoother::KeyTimestampMap newTimestamps;
     gtsam::NonlinearFactorGraph graph;
     gtsam::Values initialEstimate;
     gtsam::Values currentEstimate;
@@ -89,7 +92,7 @@ public:
     // Set up random noise generators
     std::default_random_engine generator;
     std::normal_distribution<double> distributionVO{0.0,0.0};
-    std::normal_distribution<double> distributionIMU{0.0,0.5};
+    std::normal_distribution<double> distributionIMU{0.0,0.0};
     
 
 
@@ -98,7 +101,7 @@ private:
     // Some Helper Functions
     void initializeSubsAndPubs();
     void initializeFactorGraph();
-    void sendTfs();
+    void sendTfs(double timestep);
     gtsam::ImuFactor create_imu_factor(double updatetime);
     gtsam::Point3 triangulateFeature(periodic_slam::FeatureMeasurement feature);
      
@@ -115,6 +118,8 @@ private:
     ros::Publisher pathOPTI_pub;
     ros::Publisher pathGT_pub;
     ros::Publisher point_pub;
+    ros::Publisher point_pub1;
+    ros::Publisher point_pub2;
 
     //Ros Callbacks
     void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);

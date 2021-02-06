@@ -1,0 +1,14 @@
+<launch>
+  <node name="okvis_node" pkg="okvis_ros" type="okvis_node" output="screen">
+    <param name="config_filename" value="$(find okvis_ros)/okvis/config/realsenseSim.yaml" />
+    <param name="mesh_file" value="firefly.dae" />
+    <remap from="/camera0" to="/mobile_robot/simulated/camera/left/image_raw" />
+    <remap from="/camera1" to="/mobile_robot/simulated/camera/right/image_raw" />
+    <remap from="/calibration0" to="/cam0/calibration" />
+    <remap from="/calibration1" to="/cam1/calibration" />
+    <remap from="/imu" to="/mobile_robot/camera_imu" />
+  </node>
+</launch>
+
+
+ 

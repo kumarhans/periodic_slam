@@ -15,6 +15,7 @@ int height;
 double baseline;
 double bf;
 bool visualizeImages;
+std::vector<int> estimators;
 
 cv::Mat projMatrl;
 cv::Mat projMatrr;
@@ -41,10 +42,10 @@ std::string IMAGE_R_TOPIC;
 template <typename T>
 void readParametersHelper(ros::NodeHandle &nh, std::string name, T &ans){
     if (nh.getParam(name, ans)){
-        ROS_INFO_STREAM("Loaded " << name << ": " << ans);
+        //ROS_INFO_STREAM("Loaded " << name << ": " << ans);
     }
     else{
-        ROS_ERROR_STREAM("Failed to load " << name);
+        //ROS_ERROR_STREAM("Failed to load " << name);
         nh.shutdown();
     }
   
@@ -52,30 +53,32 @@ void readParametersHelper(ros::NodeHandle &nh, std::string name, T &ans){
 
 void readParameters(ros::NodeHandle &nh){
  
-    readParametersHelper<double>(nh,"/fx",fx);
-    readParametersHelper<double>(nh,"/fy",fy);
-    readParametersHelper<double>(nh,"/cx",cx);
-    readParametersHelper<double>(nh,"/cy",cy);
-    readParametersHelper<double>(nh,"/k1",k1);
-    readParametersHelper<double>(nh,"/k2",k2);
-    readParametersHelper<double>(nh,"/p1",p1);
-    readParametersHelper<double>(nh,"/p2",p2);
-    readParametersHelper<double>(nh,"/k3",k3);
-    readParametersHelper<double>(nh,"/baseline",baseline);
-    readParametersHelper<bool>(nh,"/visualize",visualizeImages);
+    readParametersHelper<double>(nh,"fx",fx);
+    readParametersHelper<double>(nh,"fy",fy);
+    readParametersHelper<double>(nh,"cx",cx);
+    readParametersHelper<double>(nh,"cy",cy);
+    readParametersHelper<double>(nh,"k1",k1);
+    readParametersHelper<double>(nh,"k2",k2);
+    readParametersHelper<double>(nh,"p1",p1);
+    readParametersHelper<double>(nh,"p2",p2);
+    readParametersHelper<double>(nh,"k3",k3);
+    readParametersHelper<double>(nh,"baseline",baseline);
+    readParametersHelper<bool>(nh,"visualize",visualizeImages);
     
-    readParametersHelper<int>(nh,"/width",width);
-    readParametersHelper<int>(nh,"/height",height);
+    readParametersHelper<int>(nh,"width",width);
+    readParametersHelper<int>(nh,"height",height);
+    readParametersHelper<std::vector<int>>(nh,"estimators",estimators);
 
-    readParametersHelper<double>(nh,"/initX",initX);
-    readParametersHelper<double>(nh,"/initY",initY);
-    readParametersHelper<double>(nh,"/initZ",initZ);
-    readParametersHelper<double>(nh,"/initRoll",initRoll);
-    readParametersHelper<double>(nh,"/initPitch",initPitch);
-    readParametersHelper<double>(nh,"/initYaw",initYaw);
+    readParametersHelper<double>(nh,"initX",initX);
+    readParametersHelper<double>(nh,"initY",initY);
+    readParametersHelper<double>(nh,"initZ",initZ);
+    readParametersHelper<double>(nh,"initRoll",initRoll);
+    readParametersHelper<double>(nh,"initPitch",initPitch);
+    readParametersHelper<double>(nh,"initYaw",initYaw);
 
-    readParametersHelper<std::string>(nh,"/image0_topic",IMAGE_L_TOPIC);
-    readParametersHelper<std::string>(nh,"/image1_topic",IMAGE_R_TOPIC);
+    
+    readParametersHelper<std::string>(nh,"image0_topic",IMAGE_L_TOPIC);
+    readParametersHelper<std::string>(nh,"image1_topic",IMAGE_R_TOPIC);
     bf = baseline*fx;
 
     projMatrl = (cv::Mat_<float>(3, 4) << fx, 0., cx, 0., 0., fy, cy, 0., 0, 0., 1., 0);

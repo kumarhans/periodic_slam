@@ -1,0 +1,49 @@
+<launch>
+
+
+ 
+    <!-- <include file="$(find msckf_vio)/launch/msckf_vio_sim.launch"/>
+
+    <include file="$(find orb_slam2_ros)/ros/launch/orb_slam2_d435_stereo_sim.launch"/>
+     -->
+  
+    <node name="feat" pkg="feature_tracker" type="feature_tracker" respawn="false" 
+    args=" /home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i_sim/realsense_stereo_imu_config_periodic.yaml">
+    </node>  
+  
+    <node name="Graph1" pkg="periodic_slam" type="stereoISAM2_IMU_VO" respawn="false">
+    <rosparam command="load" file="$(find periodic_slam)/config/simulation1.yaml" /> 
+    </node>  
+ 
+     <node name="Graph2" pkg="periodic_slam" type="stereoISAM2_IMU_VO" respawn="false" >
+    <rosparam command="load" file="$(find periodic_slam)/config/simulation2.yaml" /> 
+    </node> 
+
+    <node name="Graph3" pkg="periodic_slam" type="stereoISAM2_IMU_VO" respawn="false"  >
+    <rosparam command="load" file="$(find periodic_slam)/config/simulation3.yaml" /> 
+    </node>
+
+    <node name="Graph4" pkg="periodic_slam" type="stereoISAM2_IMU_VO" respawn="false"    >
+    <rosparam command="load" file="$(find periodic_slam)/config/simulation13.yaml" /> 
+    </node> 
+
+    <node name="Graph5" pkg="periodic_slam" type="stereoISAM2_IMU_VO" respawn="false"  >
+    <rosparam command="load" file="$(find periodic_slam)/config/simulation123.yaml" /> 
+    </node>
+
+    <node name="vins_estimator" pkg="vins" type="vins_node" respawn="false"   
+    args= "/home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i_sim/realsense_stereo_imu_config.yaml">
+    </node>  
+
+    <node name="vins_estimator1" pkg="vins" type="vins_node" respawn="false"    
+    args= "/home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i_sim/realsense_stereo_imu_config_down.yaml">
+    </node>
+
+   <!-- <node type="rviz" name="rviz" pkg="rviz" args="-d $(find periodic_slam)/rviz/factor.config.rviz"  />
+
+      -->
+    <!-- <node type='motionBlurrer.py' name='blur' pkg='camera_gazebo'/> -->
+    
+
+
+</launch>

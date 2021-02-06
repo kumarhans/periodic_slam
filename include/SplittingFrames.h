@@ -18,7 +18,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <sensor_msgs/Imu.h>
 
-
+#include <random>
  
 class SplittingFrames
 {

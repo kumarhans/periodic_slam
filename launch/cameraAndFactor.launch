@@ -1,6 +1,6 @@
 <launch>
 
-<rosparam command="load" file="$(find periodic_slam)/config/simulation.yaml" /> 
+<rosparam command="load" file="$(find periodic_slam)/config/real.yaml" /> 
 
 
     <!-- <param
@@ -33,8 +33,8 @@
      <!-- <node name="Graphs" pkg="periodic_slam" type="dualGraph" respawn="false" output="screen">
     </node> -->
 
-    <node name="feat" pkg="feature_tracker" type="feature_tracker" respawn="false" output="screen" 
-    args=" /home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i_sim/realsense_stereo_imu_config.yaml">
+    <node name="feat" pkg="feature_tracker" type="feature_tracker_time" respawn="false" output="screen" 
+    args=" /home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i/realsense_stereo_imu_config_periodic.yaml">
     </node>
 
     <!-- <node name="split" pkg="periodic_slam" type="SplittingFrames" respawn="false" output="screen">
