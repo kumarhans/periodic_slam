@@ -23,18 +23,18 @@ height: 480
 # Extrinsic Camera Paramters 
 baseline: .1
 estimators: [1,2,3]  #1 , 2 ,3 ONLY 1 ESTIMATOR, 4 IS Up down, 5 is all 3
-# initX: 3.75
-# initY: 0.0
-# initZ: 1.25
-# initRoll: 0.0
-# initPitch: 0.0
-# initYaw: 1.570796
-initX: 0.0
-initY: 0 #0
+initX: 2.0
+initY: 0.0
 initZ: 1.25
 initRoll: 0.0
-initPitch: 0.0 #0.75 #0.62 #0.0
-initYaw: 0.0
+initPitch: 0.0
+initYaw: 1.570796
+# initX: 0.0
+# initY: 0 #0
+# initZ: 1.25
+# initRoll: 0.0
+# initPitch: 0.0 #0.75 #0.62 #0.0
+# initYaw: 0.0
 
 
  
