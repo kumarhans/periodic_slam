@@ -1,8 +1,0 @@
-<launch>
-  <node name="okvis_node" pkg="okvis_ros" type="okvis_node_synchronous" output="screen" args="$(arg config) $(arg bag)">
-    <param name="mesh_file" value="firefly.dae" />
-    <remap from="camera_topic_0" to="/mobile_robot/simulated/camera/left/image_raw" />
-    <remap from="camera_topic_1" to="/mobile_robot/simulated/camera/right/image_raw" />
-    <remap from="/imu0" to="/mobile_robot/camera_imu" />
-  </node>
-</launch>
