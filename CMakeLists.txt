@@ -106,6 +106,9 @@ add_dependencies(image_processorNew ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin
 
 add_executable(stereoISAM2_IMU_VO src/StereoISAM2_IMU_VO.cpp src/parameters.cpp)
 target_link_libraries(stereoISAM2_IMU_VO ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam gtsam_unstable)
+ 
+add_executable(stereoISAM2_IMU_VO_REAL src/StereoISAM2_IMU_VO_REAL.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU_VO_REAL ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam gtsam_unstable)
 
 add_executable(SplittingFrames src/SplittingFrames.cpp src/parameters.cpp)
 target_link_libraries(SplittingFrames ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)

@@ -77,8 +77,7 @@ void StereoISAM2::initializeSubsAndPubs(){
 
     gazSub = nh.subscribe("/gazebo/link_states", 1000, &StereoISAM2::gazCallback, this);
     ros::Duration(0.5).sleep();
-    //imuSub = nh.subscribe("/mobile_robot/camera_imu", 1000, &StereoISAM2::imuCallback, this);
-    imuSub = nh.subscribe("/camera/imu", 1000, &StereoISAM2::imuCallback, this);
+    imuSub = nh.subscribe("/mobile_robot/camera_imu", 1000, &StereoISAM2::imuCallback, this);
     camSub = nh.subscribe("/features", 1000, &StereoISAM2::camCallback, this);
     
 }
@@ -97,11 +96,11 @@ void StereoISAM2::initializeFactorGraph(){
 
 
     //Set IMU PARAMS
-    kGravity = 9.805; //simulation imu does not record gravity 
+    kGravity = 9.80; //simulation imu does not record gravity 
     IMUparams = PreintegrationParams::MakeSharedU(kGravity);
-    IMUparams->setAccelerometerCovariance(I_3x3 * 1.0);
-    IMUparams->setGyroscopeCovariance(I_3x3 * 1.0);
-    IMUparams->setIntegrationCovariance(I_3x3 * 1.0);
+    IMUparams->setAccelerometerCovariance(I_3x3 * .1);
+    IMUparams->setGyroscopeCovariance(I_3x3 * .03);
+    IMUparams->setIntegrationCovariance(I_3x3 * .1);
     IMUparams->setUse2ndOrderCoriolis(true);
     IMUparams->setOmegaCoriolis(Vector3(0, 0, 0));
     accum = PreintegratedImuMeasurements(IMUparams);
@@ -112,27 +111,25 @@ void StereoISAM2::initializeFactorGraph(){
     graphError = 0.0;
     frame = 0;
     landmark_cloud_msg_ptr = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    
-   
-
+    double firstTimestep = ros::Time::now().toSec();
     // Pose prior 
     auto priorPoseNoise = noiseModel::Diagonal::Sigmas(
         (Vector(6) << Vector3::Constant(0.01), Vector3::Constant(0.01)).finished());
     graph.add(PriorFactor<Pose3>(X(0), currPose, priorPoseNoise));
     initialEstimate.insert(X(0), currPose);
-    
+    newTimestamps[X(0)] = firstTimestep;
 
     //Velocity Prior 
     auto velnoise = noiseModel::Diagonal::Sigmas(Vector3(0.01, 0.01, 0.01));
     graph.add(PriorFactor<Vector3>(V(0), currVelocity, velnoise));
     initialEstimate.insert(V(0), currVelocity);
-    
+    newTimestamps[V(0)] = firstTimestep;
 
     //Bias Prior
     auto biasnoise = noiseModel::Diagonal::Sigmas(Vector6::Constant(0.1));
     graph.addPrior<imuBias::ConstantBias>(B(0), currBias, biasnoise);
     initialEstimate.insert(B(0), currBias);
-    
+    newTimestamps[B(0)] = firstTimestep;
  
 }
 
@@ -153,14 +150,9 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
       
         vector<periodic_slam::FeatureMeasurement> feature_vector = camera_msg->features;
         double timestep = camera_msg->header.stamp.toSec();
-        cout << timestep << endl;
+        // cout << timestep << endl;
         
-        if (frame == 0){
-            newTimestamps[X(0)] = timestep;
-            newTimestamps[V(0)] = timestep;
-            newTimestamps[B(0)] = timestep;
-        }
-        
+
         // if (imu_times.size() < 2) {
         //     return;
         // }   
@@ -184,10 +176,10 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             noiseModel::mEstimator::Cauchy::Create(1.0), prior_landmark_noise);
         
         
-        // if (camera_msg->section.data > 3 || camera_msg->section.data == -1){
-        //     sendTfs(timestep);
-        //     return;
-        // }
+        if (camera_msg->section.data > 3 || camera_msg->section.data == -1){
+            sendTfs(timestep);
+            return;
+        }
         // if (camera_msg->section.data > 3){
         //     return;
         // }
@@ -211,7 +203,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                     periodic_slam::FeatureMeasurement feature = feature_vector[i];
 
                      
-
+    
                     
 
                     int landmark_id = feature.id + (camera_msg->section.data)*100000;
@@ -226,7 +218,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                         idMap[feature_id].second = timestep;
                     }
 
-                    if ( (feature.u0 - feature.u1 ) > 30 || (feature.u0 - feature.u1 ) < 2 || (abs(feature.v0- feature.v1) > .2)){
+                    if ( (feature.u0 - feature.u1 ) > 20 || (feature.u0 - feature.u1 ) < 5 || (abs(feature.v0- feature.v1) > .2)){
                         continue;
                     }
                     Point3 world_point = triangulateFeature(feature);
@@ -242,7 +234,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                         newTimestamps[L(landmark_id)] = timestep;
                     }
                     
-                    cout << "vertDistance" << abs(feature.v0- feature.v1) << endl;
+                    //cout << "vertDistance" << abs(feature.v0- feature.v1) << endl;
                     
                     GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
                     huber, X(frame), L(landmark_id), K,bodyToSensor);
@@ -250,13 +242,11 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
                     graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
                     graph.add(PriorFactor< Point3>(L(landmark_id), world_point, prior_landmark_noise   ));
                 }
-            } //else{
-            //    sendTfs(timestep);
-            //    return;
-            //}
+            } else{
+                sendTfs(timestep);
+                return;
+            }
         } 
-        
-        
         //cout << "totalFeatss: " << idMap.size() << endl;
         int trackfeatCount = 0;
         double featureTime = 0.0;
@@ -272,9 +262,22 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         pubTrackLength(averageTime);
         
         
-  
+         // Draw new features.
+    // for (const auto& new_cam0_point : curr_cam0_points) {
+    //   cv::Point2f pt0 = new_cam0_point.second;
+    //   cv::Point2f pt1 = curr_cam1_points[new_cam0_point.first] +
+    //     Point2f(img_width, 0.0);
+
+    //   circle(out_img, pt0, 3, new_feature, -1);
+    //   circle(out_img, pt1, 3, new_feature, -1);
+    // }
+
+    // cv_bridge::CvImage debug_image(cam0_curr_img_ptr->header, "bgr8", out_img);
+    // debug_stereo_pub.publish(debug_image.toImageMsg());
+
+
         
-        cout << timestep << endl;
+
         if (frame > 0){
           initialEstimate.insert(X(frame), currPose);
           initialEstimate.insert(V(frame), currVelocity);
@@ -298,7 +301,6 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
             newTimestamps[B(frame-1)] = timestep;
             
           }
-          
         //   if (frame>2){
         //       graph.add(BetweenFactor<imuBias::ConstantBias>(B(frame-2), 
         //                                               B(frame-1), 
@@ -313,9 +315,9 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         
 
 
-        cout << timestep << endl;
+         
         smootherISAM2.update(graph, initialEstimate,newTimestamps);
-        cout << timestep << endl;
+        
         // currentEstimate = smootherISAM2.calculateEstimate();
         // currPose = currentEstimate.at<Pose3>(X(frame));
         // currVelocity = currentEstimate.at<Vector3>(V(frame));
@@ -347,7 +349,7 @@ void StereoISAM2::camCallback(const periodic_slam::CameraMeasurementPtr& camera_
         for(size_t i = 1; i < 7; ++i) { // Optionally perform multiple iSAM2 iterations
             smootherISAM2.update();
         }
-        cout << timestep << endl;
+
         currentEstimate = smootherISAM2.calculateEstimate();
         currPose = currentEstimate.at<Pose3>(X(frame));
         currVelocity = currentEstimate.at<Vector3>(V(frame));
@@ -409,22 +411,8 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
  
     geometry_msgs::Vector3 aV = imu_msg.angular_velocity;
     geometry_msgs::Vector3 lA = imu_msg.linear_acceleration;
-    Vector3 measuredAcc(lA.x,lA.y,lA.z);
+    Vector3 measuredAcc(lA.x,lA.y*0,lA.z);
     Vector3 measuredOmega(aV.x,aV.y,aV.z);
-
-    gtsam::Matrix4 roty;
-    roty << 0., 0., 1., 0.,
-            0., 1., 0., 0.,
-            -1., 0., 0., 0.,
-            0., 0., 0., 1.;
-    gtsam::Matrix4 rotz; //is NegZ
-    rotz << 0., 1., 0., 0.,
-        -1., 0., 0., 0.,
-        0., 0., 1., 0.,
-        0., 0., 0., 1.;   
- 
- 
-    gtsam::Pose3 bodyToIMU(roty*rotz);
 
     // gtsam::Matrix3 rotOne;
     // double angleOne = 1.57079;
@@ -443,18 +431,13 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
  
     // Vector3 accCorr = rotTwo*rotOne*measuredAcc;
     // Vector3 gyrCorr = rotTwo*rotOne*measuredOmega;
-
-    Vector3 accCorr = bodyToIMU.transformFrom(measuredAcc);
-    Vector3 gyrCorr = bodyToIMU.transformFrom(measuredOmega);
-    cout << measuredAcc << endl;
-    cout << accCorr << endl;
-
+  
     double timestep = imu_msg.header.stamp.toSec();
     imu_times.push_back(timestep);
-    // imu_linaccs.push_back(measuredAcc);
-    // imu_angvel.push_back(measuredOmega); 
-    imu_linaccs.push_back(accCorr);
-    imu_angvel.push_back(gyrCorr);  
+    imu_linaccs.push_back(measuredAcc);
+    imu_angvel.push_back(measuredOmega); 
+    //imu_linaccs.push_back(accCorr);
+    //imu_angvel.push_back(gyrCorr);  
 }
 
 
@@ -506,7 +489,7 @@ void StereoISAM2::sendTfs(double timestep){
     transform.setOrigin(tf::Vector3(t(0), t(1), t(2)));
     q.setRPY(r.roll(), r.pitch(), r.yaw());
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, ros::Time(timestep), "world", "Body"));
+    br.sendTransform(tf::StampedTransform(transform, ros::Time(timestep), "world", "Optimized Pose"));
 
     //Send ground truth tf
     t = gtPose.translation();
@@ -522,11 +505,7 @@ void StereoISAM2::sendTfs(double timestep){
     transform.setOrigin(tf::Vector3(t(0), t(1), t(2)));
     q.setRPY(r.roll(), r.pitch(), r.yaw());
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, ros::Time(timestep), "Body", "LCam"));
-    transform.setOrigin(tf::Vector3(baseline,0,0));
-    q.setRPY(0,0,0);
-    transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, ros::Time(timestep), "LCam", "RCam"));
+    br.sendTransform(tf::StampedTransform(transform, ros::Time(timestep), "True Pose", "Camera"));
 
 
     //Publish landmark PointCloud message (in world frame)

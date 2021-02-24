@@ -15,6 +15,8 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/Float32.h>
+#include <std_msgs/Int32.h>
 #include "parameters.h"
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
@@ -62,6 +64,7 @@ public:
     int loopKeyDown;
     int loopKeyUp;
     bool estimatorInit;
+    
 
     int lastUp;
     int lastDown;
@@ -72,6 +75,7 @@ public:
     double graphError;
     std::vector<int> landmarkOffsets;
     std::vector<int> landmarkIDs;
+    std::map<int, std::pair<double,double>> idMap;
     
     //Initilize GTSAM Variables
     gtsam::IncrementalFixedLagSmoother smootherISAM2;
@@ -102,6 +106,8 @@ private:
     void initializeSubsAndPubs();
     void initializeFactorGraph();
     void sendTfs(double timestep);
+    void pubTrackCount( int count);
+    void pubTrackLength( double length);
     gtsam::ImuFactor create_imu_factor(double updatetime);
     gtsam::Point3 triangulateFeature(periodic_slam::FeatureMeasurement feature);
      
@@ -118,8 +124,10 @@ private:
     ros::Publisher pathOPTI_pub;
     ros::Publisher pathGT_pub;
     ros::Publisher point_pub;
-    ros::Publisher point_pub1;
-    ros::Publisher point_pub2;
+    ros::Publisher pub_track_length;
+    ros::Publisher pub_track;
+    
+
 
     //Ros Callbacks
     void camCallback(const periodic_slam::CameraMeasurementPtr& camera_msg);
