@@ -18,6 +18,7 @@
 #include <std_msgs/Float32.h>
 #include <std_msgs/Int32.h>
 #include "parameters.h"
+#include <gtsam/navigation/CombinedImuFactor.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
 #include <geometry_msgs/Twist.h>
@@ -49,9 +50,13 @@ public:
     nav_msgs::Path pathOPTI;
 
     //State of Robot
-    gtsam::Pose3 currPose; 
-    gtsam::Vector3 currVelocity;
-    gtsam::imuBias::ConstantBias currBias;  
+    gtsam::Pose3 priorPose; 
+    gtsam::Vector3 priorVelocity;
+    gtsam::imuBias::ConstantBias priorBias; 
+    gtsam::NavState prev_state;
+    gtsam::NavState prop_state;
+    gtsam::imuBias::ConstantBias prev_bias;
+
     gtsam::Pose3 gtPose = gtsam::Pose3();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr landmark_cloud_msg_ptr;
     double phase;
@@ -86,8 +91,8 @@ public:
     gtsam::Values currentEstimate;
 
     //Initialize IMU Variables
-    boost::shared_ptr<gtsam::PreintegrationParams> IMUparams;
-    gtsam::PreintegratedImuMeasurements accum;
+    boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> IMUparams;
+    std::shared_ptr<gtsam::PreintegrationType> preintegrated;
     std::deque<double> imu_times;
     std::deque<gtsam::Vector3> imu_linaccs;
     std::deque<gtsam::Vector3> imu_angvel;
@@ -110,8 +115,9 @@ private:
     void do_nominal_init();
     void pubTrackCount( int count);
     void pubTrackLength( double length);
-    gtsam::ImuFactor create_imu_factor(double updatetime);
+    gtsam::CombinedImuFactor create_imu_factor(double updatetime);
     gtsam::Point3 triangulateFeature(periodic_factor_graph::FeatureMeasurement feature);
+    boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> imuParams();
      
     //Ros Subscribers
     ros::NodeHandle nh;

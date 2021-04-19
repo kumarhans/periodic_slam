@@ -6,7 +6,7 @@ image0_topic: "/DualFactor/down/leftImage"
 image1_topic: "/DualFactor/down/rightImage"
 
 visualize: true
-
+useGrav: false
 # Intrinsic Camera Paramters
 fx: 554.3827128
 fy: 554.3827128
@@ -35,6 +35,8 @@ initZ: 1.25
 initRoll: 0.0
 initPitch: 0.0 #0.75 #0.62 #0.0
 initYaw: 0.0
+gravMag: 9.80
+#gravMag: 1.0
 
 
  

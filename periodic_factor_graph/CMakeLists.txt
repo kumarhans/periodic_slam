@@ -85,8 +85,8 @@ link_directories(
 add_executable(stereoISAM2_IMU_VO src/StereoISAM2_IMU_VO.cpp src/parameters.cpp)
 target_link_libraries(stereoISAM2_IMU_VO ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam gtsam_unstable)
  
-#add_executable(stereoISAM2_IMU_VO_REAL src/StereoISAM2_IMU_VO_REAL.cpp src/parameters.cpp)
-#target_link_libraries(stereoISAM2_IMU_VO_REAL ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam gtsam_unstable)
+add_executable(stereoISAM2_IMU_VO_BATCH src/StereoISAM2_IMU_VO_BATCH.cpp src/parameters.cpp)
+target_link_libraries(stereoISAM2_IMU_VO_BATCH ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} gtsam gtsam_unstable)
 
  
  

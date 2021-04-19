@@ -17,9 +17,13 @@ k3: 0.0
 width: 640
 height: 480
 
+
+
+ 
+
 # Extrinsic Camera Paramters 
 baseline: .05
-estimators: [1,2,3] 
+estimators: [1] 
 # initX: 0.0
 # initY: 0.0
 # initZ: 1.25
@@ -28,7 +32,7 @@ estimators: [1,2,3]
 # initYaw: 0.0
 initX: 0.0
 initY: 0.0 #0
-initZ: 1.25
+initZ: 0.0
 initRoll: 0.0
 initPitch: 0.0 #0.75 #0.62 #0.0
 initYaw: 0.0

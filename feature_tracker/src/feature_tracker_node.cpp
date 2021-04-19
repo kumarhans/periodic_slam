@@ -47,8 +47,10 @@ double currPhase = 0.0;
 
 Matrix3d ric[2];
 Vector3d tic[2];
-queue<sensor_msgs::ImageConstPtr> img0_buf;
-queue<sensor_msgs::ImageConstPtr> img1_buf;
+deque<sensor_msgs::ImageConstPtr> img0_buf;
+deque<sensor_msgs::ImageConstPtr> img1_buf;
+deque<double> phase_buf;
+
 std::mutex m_buf;
 
 cv::Mat img0_down;
@@ -67,6 +69,7 @@ double cy = 240.5;
 
 double baseline = .1;
 
+double currVel = 0.0;
 
 
 void getStereoPairs(const cv::Mat &imLeftprev, const cv::Mat &imRightprev,
@@ -162,11 +165,17 @@ void pubStereoFeatures(map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> 
     for (auto const& feature : featureFrame){
         feature_msg_ptr->features.push_back(feature_tracker::FeatureMeasurement());
 
+        // feature_msg_ptr->features[i].id = feature.first;
+        // feature_msg_ptr->features[i].u0 = feature.second[0].second[0]*554.3827128 + 640/2 + .5;
+        // feature_msg_ptr->features[i].v0 = feature.second[0].second[1]*554.3827128 + 480/2 + .5;
+        // feature_msg_ptr->features[i].u1 = feature.second[1].second[0]*554.3827128 + 640/2 + .5;
+        // feature_msg_ptr->features[i].v1 = feature.second[1].second[1]*554.3827128 + 480/2 + .5;
+
         feature_msg_ptr->features[i].id = feature.first;
-        feature_msg_ptr->features[i].u0 = feature.second[0].second[0]*554.3827128 + 640/2 + .5;
-        feature_msg_ptr->features[i].v0 = feature.second[0].second[1]*554.3827128 + 480/2 + .5;
-        feature_msg_ptr->features[i].u1 = feature.second[1].second[0]*554.3827128 + 640/2 + .5;
-        feature_msg_ptr->features[i].v1 = feature.second[1].second[1]*554.3827128 + 480/2 + .5;
+        feature_msg_ptr->features[i].u0 = feature.second[0].second[0]*385.7544860839844 + 323.1204833984375;
+        feature_msg_ptr->features[i].v0 = feature.second[0].second[1]*385.7544860839844+ 236.7432098388672;
+        feature_msg_ptr->features[i].u1 = feature.second[1].second[0]*385.7544860839844 + 323.1204833984375;
+        feature_msg_ptr->features[i].v1 = feature.second[1].second[1]*385.7544860839844 + 236.7432098388672;
 
         i++;
     }
@@ -298,7 +307,8 @@ void pubTrackCount(const int count){
 void img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     m_buf.lock();
-    img0_buf.push(img_msg);
+    img0_buf.push_back(img_msg);
+    phase_buf.push_back(currPhase);
     m_buf.unlock();
 }
 
@@ -306,7 +316,7 @@ void img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     m_buf.lock();
-    img1_buf.push(img_msg);
+    img1_buf.push_back(img_msg);
     m_buf.unlock();
 }
 
@@ -330,17 +340,33 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
 
     cv::Mat img = ptr->image.clone();
+
+         
+    
+    // int kernel_size = abs(currVel)/7.5*51;
+    // if (kernel_size % 2 == 0){
+    //     kernel_size ++;
+    // }
+   
+  
+     
+    // if (kernel_size > 2){
+    //     cv::blur(img, img, cv::Size(kernel_size,kernel_size));
+    // }
+    
+    
+
     return img;
 }
 
 
-void feature_frame_push(double t, const cv::Mat &_img, const cv::Mat &_img1)
+void feature_frame_push(double t, const cv::Mat &_img, const cv::Mat &_img1, double phase)
 {
     
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     TicToc featureTrackerTime;
     double pitch = currPitch;
-    double phase = currPhase;
+    
     cv::Mat imgTrack;
 
  
@@ -349,7 +375,7 @@ void feature_frame_push(double t, const cv::Mat &_img, const cv::Mat &_img1)
     if(_img1.empty())
         featureFrame = featureTracker1.trackImage(t, _img);
     else{
-        if (pitch < -.12*1000){  //magic number is .43  or .23 or .4
+        if (phase < -.23){  //magic number is .43  or .23 or .4  //Fast For -.23
             if (img0_down.empty()){
                 img0_down = _img;
                 img1_down = _img1;
@@ -361,7 +387,7 @@ void feature_frame_push(double t, const cv::Mat &_img, const cv::Mat &_img1)
             pubStereoFeatures(featureTracker1.trackImage(t, _img, _img1),t, 1);
             pubTrackImage1(featureTracker1.getTrackImage(), t, 1);
             
-        } else if (-.01*1000 < pitch  && pitch < .03*1000){
+        } else if (-.11 < phase  && phase < -.07){ //Fast For -.11 to -.07
             if (img0_mid.empty()){
                 img0_mid = _img;
                 img1_mid = _img1;
@@ -371,7 +397,7 @@ void feature_frame_push(double t, const cv::Mat &_img, const cv::Mat &_img1)
             pubStereoFeatures(featureTracker2.trackImage(t, _img, _img1),t, 2);
             pubTrackImage2(featureTracker2.getTrackImage(), t, 2);
             
-        } else if (pitch > .12*1000){
+        } else if (phase > .1){  //Fast For .1
             if (img0_up.empty()){
                 img0_up = _img;
                 img1_up = _img1;
@@ -430,6 +456,7 @@ void sync_process()
             cv::Mat image0, image1;
             std_msgs::Header header;
             double time;
+            double phase;
             m_buf.lock();
             if (!img0_buf.empty() && !img1_buf.empty())
             {
@@ -440,12 +467,12 @@ void sync_process()
        
                 if(time0 < time1 - 0.003)
                 {
-                    img0_buf.pop();
+                    img0_buf.pop_front();
                     printf("throw img0\n");
                 }
                 else if(time0 > time1 + 0.003)
                 {
-                    img1_buf.pop();
+                    img1_buf.pop_front();
                     printf("throw img1\n");
                 }
                 else
@@ -453,46 +480,46 @@ void sync_process()
                     time = img0_buf.front()->header.stamp.toSec();
                     header = img0_buf.front()->header;
                     image0 = getImageFromMsg(img0_buf.front());
-                    img0_buf.pop();
+                    img0_buf.pop_front();
                     image1 = getImageFromMsg(img1_buf.front());
-                    img1_buf.pop();
+                    img1_buf.pop_front();
+                    phase = phase_buf.front();
+                    phase_buf.pop_front();
                     //printf("find img0 and img1\n");
                 }
             }
             m_buf.unlock();
-            if(!image0.empty())
-                feature_frame_push(time, image0, image1);
-        } 
-        // if (STEREO)
-        // {
-        //     cv::Mat image0, image1;
-        //     std_msgs::Header header;
-        //     double time;
-        //     m_buf.lock();
-        //     if (img0_buf.size() > 2 && img1_buf.size() > 2)
-        //     {
+            if(!image0.empty())                
+                feature_frame_push(time, image0, image1, phase);
+         
+//         if (STEREO)
+//         {
+//             cv::Mat image0, image1;
+//             std_msgs::Header header;
+//             double time;
+//             m_buf.lock();
+//             if (img0_buf.size() > 2 && img1_buf.size() > 2)
+//             {
+//                 image0 = 0.0*getImageFromMsg(img0_buf.front());
+//                 img0_buf.pop_front();
+//                 time = img0_buf.front()->header.stamp.toSec();
+//                 header = img0_buf.front()->header;
+//                 image0 += 1.0*getImageFromMsg(img0_buf.front()); 
+//                 image0 += 0.0*getImageFromMsg(img0_buf[1]);
                  
-        //         image0 = .15*getImageFromMsg(img0_buf.front());
-        //         img0_buf.pop();
-        //         time = img0_buf.front()->header.stamp.toSec();
-        //         header = img0_buf.front()->header;
-        //         image0 += .7*getImageFromMsg(img0_buf.front());
-        //         img0_buf.pop();
-        //         image0 += .15*getImageFromMsg(img0_buf.front());
-        //         img0_buf.pop();
-
-        //         image1 = .15*getImageFromMsg(img1_buf.front());
-        //         img1_buf.pop();
-        //         image1 += .7*getImageFromMsg(img1_buf.front());
-        //         img1_buf.pop();
-        //         image1 += .15*getImageFromMsg(img1_buf.front());
-        //         img1_buf.pop();
+//                 image1 = 0.0*getImageFromMsg(img1_buf.front());
+//                 img1_buf.pop_front();
+//                 time = img1_buf.front()->header.stamp.toSec();
+//                 header = img1_buf.front()->header;
+//                 image1 += 1.0*getImageFromMsg(img1_buf.front()); 
+//                 image1 += 0.0*getImageFromMsg(img1_buf[1]);
+//                 phase_buf.pop_front();
                 
-        //     }
-        //     m_buf.unlock();
-        //     if(!image0.empty())
-        //         feature_frame_push(time, image0, image1);
-        // }
+//             }
+//             m_buf.unlock();
+//             if(!image0.empty())
+//                 feature_frame_push(time, image0, image1, phase_buf.front());
+        }
         else
         {
             cv::Mat image;
@@ -504,7 +531,8 @@ void sync_process()
                 time = img0_buf.front()->header.stamp.toSec();
                 header = img0_buf.front()->header;
                 image = getImageFromMsg(img0_buf.front());
-                img0_buf.pop();
+                img0_buf.pop_front()
+;
             }
             m_buf.unlock();
             // if(!image.empty())
@@ -513,7 +541,7 @@ void sync_process()
 
         std::chrono::milliseconds dura(2);
         std::this_thread::sleep_for(dura);
-    }
+   }
 }
 
 
@@ -531,7 +559,7 @@ void gtCallback(const geometry_msgs::PoseStamped::ConstPtr& msg){
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
-    currPitch = roll;
+    currPhase = roll;
     cout << currPitch << endl;
 }
 
@@ -540,6 +568,17 @@ void phaseCallback(const std_msgs::Float64 &msgs){
     currPhase = msgs.data;
 }
 
+void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
+{
+    double t = imu_msg->header.stamp.toSec();
+    double dx = imu_msg->linear_acceleration.x;
+    double dy = imu_msg->linear_acceleration.y;
+    double dz = imu_msg->linear_acceleration.z;
+    double rx = imu_msg->angular_velocity.x;
+    double ry = imu_msg->angular_velocity.y;
+    double rz = imu_msg->angular_velocity.z;
+    currVel = ry;
+}
 
 
 
@@ -582,6 +621,9 @@ int main(int argc, char **argv)
     ros::Subscriber gazSUB = n.subscribe("/gazebo/link_states", 1000, gazCallback);
     ros::Subscriber phaseSUB = n.subscribe("/mobile_robot/phase", 1000, phaseCallback); 
     ros::Subscriber gtSUB = n.subscribe("/mocap_node/Robot_1/pose", 1000, gtCallback);
+    
+    //ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
+
 
     pub_image_track1 = n.advertise<sensor_msgs::Image>("feature_img1",1000);
     pub_image_track2 = n.advertise<sensor_msgs::Image>("feature_img2",1000);

@@ -20,7 +20,8 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/features2d/features2d.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
- 
+#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
+
 #include "parameters.h"
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Twist.h>
@@ -69,17 +70,17 @@ StereoISAM2::~StereoISAM2 () {}
 boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> StereoISAM2::imuParams() {
   // We use the sensor specs to build the noise model for the IMU factor.
   double accel_noise_sigma = 1.0;
-  double gyro_noise_sigma = 1.0;
-  double accel_bias_rw_sigma = .0001;
-  double gyro_bias_rw_sigma = .0001;
+  double gyro_noise_sigma = 0.1;
+  double accel_bias_rw_sigma = 0.01;
+  double gyro_bias_rw_sigma = 0.001;
   Matrix33 measured_acc_cov = I_3x3 * pow(accel_noise_sigma, 2);
   Matrix33 measured_omega_cov = I_3x3 * pow(gyro_noise_sigma, 2);
   Matrix33 integration_error_cov =
-      I_3x3 * 1e-3;  // error committed in integrating position from velocities
+      I_3x3 * .00001;  // error committed in integrating position from velocities
   Matrix33 bias_acc_cov = I_3x3 * pow(accel_bias_rw_sigma, 2);
   Matrix33 bias_omega_cov = I_3x3 * pow(gyro_bias_rw_sigma, 2);
   Matrix66 bias_acc_omega_int =
-      I_6x6 * 1e-3;  // error in the bias used for preintegration
+      I_6x6 * 1e-5;  // error in the bias used for preintegration
 
   auto p = PreintegratedCombinedMeasurements::Params::MakeSharedU(gravMag);
   // PreintegrationBase params:
@@ -124,11 +125,7 @@ void StereoISAM2::initializeFactorGraph(){
     ROS_INFO("Initializing Factor Graph");
 
     //SET ISAM2 PARAMS
-    ISAM2Params parameters;
-    double lag = 2.0;
-    parameters.relinearizeThreshold = 0.003; // Set the relin threshold to zero such that the batch estimate is recovered
-    parameters.relinearizeSkip = 1; // Relinearize every time
-    smootherISAM2 = IncrementalFixedLagSmoother(lag, parameters);
+    
 
     //Set IMU PARAMS
     IMUparams = imuParams();
@@ -170,12 +167,12 @@ void StereoISAM2::do_accel_init() {
     graph.add(PriorFactor<Pose3>(X(0), priorPose, priorPoseNoise));
     initialEstimate.insert(X(0), priorPose);
 
-    // Velocity Prior 
+    //Velocity Prior 
     auto velnoise = noiseModel::Diagonal::Sigmas(Vector3(0.01, 0.01, 0.01));
     graph.add(PriorFactor<Vector3>(V(0), priorVelocity, velnoise));
     initialEstimate.insert(V(0), priorVelocity);
      
-    // Bias Prior
+    //Bias Prior
     auto biasnoise = noiseModel::Diagonal::Sigmas(Vector6::Constant(0.1));
     graph.addPrior<imuBias::ConstantBias>(B(0), priorBias, biasnoise);
     initialEstimate.insert(B(0), priorBias);
@@ -233,161 +230,97 @@ void StereoISAM2::camCallback(const periodic_factor_graph::CameraMeasurementPtr&
         double timestep = camera_msg->header.stamp.toSec();
          
         if (!accel_init_done) {return;}
-
-        
-
-
-        auto gaussian = noiseModel::Isotropic::Sigma(3, 6.0);
+ 
+        auto gaussian = noiseModel::Isotropic::Sigma(3, 4.0);
         if (camera_msg->section.data == 2 && estimatorInit){
             auto gaussian = noiseModel::Isotropic::Sigma(3, 10.0);
         }
 
         auto huber = noiseModel::Robust::Create(
-            noiseModel::mEstimator::GemanMcClure::Create(2.0), gaussian);
-
-        // auto huber = noiseModel::Robust::Create(
-        //     noiseModel::mEstimator::Cauchy::Create(2.5), gaussian);
+            noiseModel::mEstimator::GemanMcClure::Create(1.25), gaussian);
 
 
         gtsam::Cal3_S2Stereo::shared_ptr K{new gtsam::Cal3_S2Stereo(fx, fy, 0.0, cx, cy, baseline)};
 
         noiseModel::Isotropic::shared_ptr prior_landmark_noise = noiseModel::Isotropic::Sigma(3, 3000); 
         auto huberPrior = noiseModel::Robust::Create(
-            noiseModel::mEstimator::Cauchy::Create(2.0), prior_landmark_noise);
+            noiseModel::mEstimator::Cauchy::Create(1.0), prior_landmark_noise);
         
         
-        // if (camera_msg->section.data > 3 || camera_msg->section.data == -1){
-        //     sendTfs(timestep);
-        //     return;
-        // }
-        // if (camera_msg->section.data > 3){
-        //     return;
-        // }
-        if (camera_msg->section.data == -1){
+        if (camera_msg->section.data > 3 || camera_msg->section.data == -1){
             return;
         }
+         
 
-        if (frame == 0){
-            newTimestamps[X(0)] = timestep;
-            newTimestamps[V(0)] = timestep;
-            newTimestamps[B(0)] = timestep;
-        } else {
-            //Add Imu Factor
-            CombinedImuFactor imufac = create_imu_factor(timestep);
-            graph.add(imufac);
+        if (frame > 0){
+          //Add Imu Factor
+          CombinedImuFactor imufac = create_imu_factor(timestep);
+          graph.add(imufac);
 
-            prop_state = preintegrated->predict(prev_state, prev_bias);
-            initialEstimate.insert(X(frame), prop_state.pose());
-            initialEstimate.insert(V(frame), prop_state.v());
-            initialEstimate.insert(B(frame), prev_bias); 
-            newTimestamps[X(frame)] = timestep;
-            newTimestamps[V(frame)] = timestep; 
-            newTimestamps[B(frame)] = timestep;        
+          prop_state = preintegrated->predict(prev_state, prev_bias);
+          initialEstimate.insert(X(frame), prop_state.pose());
+          initialEstimate.insert(V(frame), prop_state.v());
+          initialEstimate.insert(B(frame), prev_bias);       
         }
 
-        std::vector<int> newLands;
-
-        // cv::Mat out_img = 
-        gtsam::Point3 point2;
-        int matchCount = 0;
-        int trackCount = 0;
-        gtsam::Point3 samePoint(0.0, 0.0, 0.0);
-        auto pointnoise = noiseModel::Diagonal::Sigmas(Vector3::Constant(0.0001));
+     
+   
         if (camera_msg->section.data != -1){
 
             if(std::find(estimators.begin(), estimators.end(), camera_msg->section.data) != estimators.end() || !estimatorInit){
-                
                 if (!estimatorInit && std::find(estimators.begin(), estimators.end(), camera_msg->section.data)!= estimators.end() ) {estimatorInit = true;}
                 
                 for (int i = 0; i < feature_vector.size(); i++){
                     
                     periodic_factor_graph::FeatureMeasurement feature = feature_vector[i];
                     
-                    int landmark_id = feature.id + (camera_msg->section.data)*100000;
-                    if (std::find(landmarkIDs.begin(),landmarkIDs.end(),landmark_id) != landmarkIDs.end()){
-                        trackCount ++;
-                    }
-                    int feature_id = landmark_id;
-                    if ( idMap.find(feature_id) == idMap.end()){
-                        idMap[feature_id].first = timestep;
-                    } else{
-                        idMap[feature_id].second = timestep;
-                    }
-                    landmarkIDs.push_back(landmark_id); 
-
-                    if ( (feature.u0 - feature.u1 ) > 20 || (feature.u0 - feature.u1 ) < 3 || (abs(feature.v0- feature.v1) > .5)){
+              
+                    if ( (feature.u0 - feature.u1 ) > 20 || (feature.u0 - feature.u1 ) < 3 || (abs(feature.v0- feature.v1) > .4)){
                         continue;
                     }
-
-                    
-                     
                     Point3 world_point = triangulateFeature(feature);
-
-        
-                    if (!currentEstimate.exists(L(landmark_id))) {
-                        
-                        newLands.push_back(landmark_id);
+                    int landmark_id = feature.id + (camera_msg->section.data)*100000;
+                    if (std::find(landmarkIDs.begin(),landmarkIDs.end(),landmark_id) == landmarkIDs.end()){
                         initialEstimate.insert(L(landmark_id), world_point);
-                        newTimestamps[L(landmark_id)] = timestep;
-                        graph.add(PriorFactor< Point3>(L(landmark_id), world_point, prior_landmark_noise   ));
-                    } else {
-                        newTimestamps[L(landmark_id)] = timestep;
+                        //graph.add(PriorFactor< Point3>(L(landmark_id), world_point, prior_landmark_noise));
                     }
+                    landmarkIDs.push_back(landmark_id);
+                    int feature_id = landmark_id;
+
                     
-                    //cout << "vertDistance" << abs(feature.v0- feature.v1) << endl;
-                    
+
+         
                     GenericStereoFactor<Pose3, Point3> visualFactor(StereoPoint2(feature.u0, feature.u1, feature.v0), 
                     huber, X(frame), L(landmark_id), K,bodyToSensor);
 
                     graph.emplace_shared<GenericStereoFactor<Pose3, Point3> >(visualFactor);
-                    //graph.add(PriorFactor< Point3>(L(landmark_id), world_point, prior_landmark_noise   ));
+                    
                 }
-            } 
-            // else{
-            //    sendTfs(timestep);
-            //    return;
-            // }
-            int trackfeatCount = 0;
-            double featureTime = 0.0;
-            for (auto idPair: idMap){
-                //cout << idPair.first << " " << idPair.second.first << " " << idPair.second.second << endl;
-                if (idPair.second.second != 0.0){
-                    trackfeatCount ++;
-                    featureTime += abs(idPair.second.first-idPair.second.second); 
-                }
-            }
-            double averageTime = featureTime/trackfeatCount;
-            pubTrackCount(trackCount);
-            pubTrackLength(averageTime);                                                                                
+            }  
         } 
-
-                //cout << "totalFeatss: " << idMap.size() << endl;
-        
-
-
-        
-      
-        
         
        
-        smootherISAM2.update(graph, initialEstimate,newTimestamps);
-        for(size_t i = 1; i < 7; ++i) { // Optionally perform multiple iSAM2 iterations
-            smootherISAM2.update();
-        }
-         
+        
 
-        currentEstimate = smootherISAM2.calculateEstimate();
-        prev_state =
-          gtsam::NavState(currentEstimate.at<Pose3>(X(frame)), currentEstimate.at<Vector3>(V(frame)));
-        prev_bias = currentEstimate.at<imuBias::ConstantBias>(B(frame));
+         
+        if (frame == 300){
+            cout << "started" << endl;
+            LevenbergMarquardtOptimizer optimizer(graph, initialEstimate);
+            currentEstimate = optimizer.optimize();
+            sendTfs(timestep);
+            currentEstimate.print("Final result:\n");
+            cout << "sent" << endl;
+        }
+
+        
+        prev_state = prop_state;
+       
  
-        graph.resize(0);
-        initialEstimate.clear();
-        newTimestamps.clear();
+       
         preintegrated->resetIntegrationAndSetBias(prev_bias);
         frame ++;
          
-        sendTfs(timestep);
+        
         
         
 }
@@ -410,8 +343,6 @@ void StereoISAM2::imuCallback(const sensor_msgs::Imu &imu_msg){
  
     geometry_msgs::Vector3 aV = imu_msg.angular_velocity;
     geometry_msgs::Vector3 lA = imu_msg.linear_acceleration;
-    double sat = abs(3*gravMag);
-    //Vector3 measuredAcc(max(min(lA.x,sat),-sat),max(min(lA.y,sat),-sat),max(min(lA.z,sat),-sat));
     Vector3 measuredAcc(lA.x,lA.y,lA.z);
     Vector3 measuredOmega(aV.x,aV.y,aV.z);
     
@@ -547,32 +478,30 @@ void StereoISAM2::sendTfs(double timestep){
     pathGT.header.stamp = poseStamped.header.stamp;
     pathGT_pub.publish(pathGT);
  
-    gtsam::Pose3 pose = prev_state.pose(); 
-    poseStamped.pose.position.x =  pose.x();
-    poseStamped.pose.position.y = pose.y();
-    poseStamped.pose.position.z = pose.z();
-    pathOPTI.header.frame_id = "world";
-    pathOPTI.poses.push_back(poseStamped);
-    pathOPTI.header.stamp = poseStamped.header.stamp;
-    pathOPTI_pub.publish(pathOPTI); 
+    // gtsam::Pose3 pose = prev_state.pose(); 
+    // poseStamped.pose.position.x =  pose.x();
+    // poseStamped.pose.position.y = pose.y();
+    // poseStamped.pose.position.z = pose.z();
+    // pathOPTI.header.frame_id = "world";
+    // pathOPTI.poses.push_back(poseStamped);
+    // pathOPTI.header.stamp = poseStamped.header.stamp;
+    // pathOPTI_pub.publish(pathOPTI); 
 
-    // //Publish SLAM Trajectory
-    // gtsam::Pose3 pose;
-    // for (int i = 0; i <= frame-1; i ++){
-    //     if (!currentEstimate.exists(X(i))) {continue;}
-    //     pose = currentEstimate.at<Pose3>(X(i));   
-    //     poseStamped.pose.position.x =  pose.x();
-    //     poseStamped.pose.position.y = pose.y();
-    //     poseStamped.pose.position.z = pose.z();
-    //     pathOPTI.header.frame_id = "world";
-    //     if ((i == frame-1) && (pathOPTI.poses.size()<frame-1)){
-    //         pathOPTI.poses.push_back(poseStamped);
-    //     } else {
-    //         pathOPTI.poses[i] = poseStamped;
-    //     }
-    //     pathOPTI.header.stamp = poseStamped.header.stamp;
-    //     pathOPTI_pub.publish(pathOPTI); 
-    // }
+    //Publish SLAM Trajectory
+    gtsam::Pose3 pose;
+    for (int i = 0; i <= frame-1; i ++){
+         
+        //if (!currentEstimate.exists(X(i))) {continue;}
+        pose = currentEstimate.at<Pose3>(X(i)); 
+        cout << pose.x() << endl;  
+        poseStamped.pose.position.x =  pose.x();
+        poseStamped.pose.position.y = pose.y();
+        poseStamped.pose.position.z = pose.z();
+        pathOPTI.header.frame_id = "world";
+        pathOPTI.poses.push_back(poseStamped);
+        pathOPTI.header.stamp = poseStamped.header.stamp;
+        pathOPTI_pub.publish(pathOPTI); 
+    }
      
     
     //Publish Pose

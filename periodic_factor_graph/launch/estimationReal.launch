@@ -1,0 +1,37 @@
+<launch>
+
+
+ 
+    <include file="$(find msckf_vio)/launch/msckf_vio_real.launch"/>  
+
+    <include file="$(find orb_slam2_ros)/ros/launch/orb_slam2_d435_stereo_real.launch"/>
+      
+ 
+    <node name="feat" pkg="feature_tracker" type="feature_tracker" respawn="false"   
+      args=" /home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i/realsense_stereo_imu_config_periodic.yaml">
+    </node> 
+
+       
+    <node name="Graph1" pkg="periodic_factor_graph" type="stereoISAM2_IMU_VO" respawn="false">
+    <rosparam command="load" file="$(find periodic_factor_graph)/config/real1.yaml" /> 
+    </node>  
+ 
+    <node name="Graph2" pkg="periodic_factor_graph" type="stereoISAM2_IMU_VO" respawn="false" >
+    <rosparam command="load" file="$(find periodic_factor_graph)/config/real2.yaml" /> 
+    </node> 
+
+    <node name="Graph3" pkg="periodic_factor_graph" type="stereoISAM2_IMU_VO" respawn="false"  >
+    <rosparam command="load" file="$(find periodic_factor_graph)/config/real3.yaml" /> 
+    </node>
+ 
+    <node name="Graph5" pkg="periodic_factor_graph" type="stereoISAM2_IMU_VO" respawn="false"    >
+      <rosparam command="load" file="$(find periodic_factor_graph)/config/real123.yaml" /> 
+    </node> 
+
+    <node name="vins_estimator" pkg="vins" type="vins_node" respawn="false"    
+      args= "/home/hans/catkin_ws/src/VINS-Fusion/config/realsense_d435i/realsense_stereo_imu_config.yaml">
+    </node>    
+    
+
+
+</launch>

@@ -107,7 +107,7 @@ void readParameters(ros::NodeHandle &nh){
              0.,   0.,   1.,        0., 
              0.,   0.,   0.,        1.;
  
-    //bodyToSensor = gtsam::Pose3(roty*rotz*real);
+    //bodyToSensor = gtsam::Pose3(roty*rotz);
     bodyToSensor = gtsam::Pose3(real);
 
     
