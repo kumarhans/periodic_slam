@@ -5,6 +5,9 @@
 This package performs state estimation periodically
 
 Dataset: 
+
+## Citation
+If you use this work, please be sure to cite [Kumar, H.; Payne, J. J.; Travers, M.; Johnson, A. M.; and Choset, H. Periodic SLAM: Using Cyclic Constraints to Improve the Performance of Visual-Inertial SLAM on Legged Robots. In ICRA Workshop on Visual-Inertial Navigation Systems, May 2021.](https://udel.edu/~ghuang/icra21-vins-workshop/papers/04-Kumar_PeriodicSLAM.pdf)
 ## Preliminaries
 
 This package uses: 
